@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Html } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { Settings, Bell } from 'lucide-react';
+import { Settings, Bell, X } from 'lucide-react';
 
 export interface ServiceNode {
   id: string;
@@ -12,8 +13,6 @@ export interface ServiceNode {
   provider: string;
   color: string;
   glowColor: string;
-  gradientTop: string;
-  gradientBottom: string;
   orbitRadiusX: number;
   orbitRadiusZ: number;
   tilt: [number, number, number];
@@ -24,15 +23,13 @@ export interface ServiceNode {
 const SERVICES: ServiceNode[] = [
   {
     id: 'openai',
-    name: 'OpenAI API',
+    name: 'OpenAI',
     provider: 'OPENAI',
-    color: '#10b981',
-    glowColor: '#34d399',
-    gradientTop: '#a7f3d0',
-    gradientBottom: '#059669',
-    orbitRadiusX: 4.6,
-    orbitRadiusZ: 2.4,
-    tilt: [0.18, -0.25, 0.12],
+    color: '#059669',
+    glowColor: '#10b981',
+    orbitRadiusX: 4.9,
+    orbitRadiusZ: 2.6,
+    tilt: [0.15, -0.2, 0.1],
     speed: 0.45,
     size: 0.65
   },
@@ -40,13 +37,11 @@ const SERVICES: ServiceNode[] = [
     id: 'gemini',
     name: 'Google Gemini',
     provider: 'GOOGLE',
-    color: '#38bdf8',
-    glowColor: '#f43f5e',
-    gradientTop: '#60a5fa',
-    gradientBottom: '#ec4899',
-    orbitRadiusX: 6.2,
-    orbitRadiusZ: 3.2,
-    tilt: [-0.14, -0.32, 0.2],
+    color: '#0284c7',
+    glowColor: '#ec4899',
+    orbitRadiusX: 6.6,
+    orbitRadiusZ: 3.4,
+    tilt: [-0.12, -0.3, 0.18],
     speed: 0.35,
     size: 0.72
   },
@@ -54,28 +49,24 @@ const SERVICES: ServiceNode[] = [
     id: 'vercel',
     name: 'Vercel Edge',
     provider: 'VERCEL',
-    color: '#f8fafc',
-    glowColor: '#94a3b8',
-    gradientTop: '#ffffff',
-    gradientBottom: '#64748b',
-    orbitRadiusX: 7.6,
-    orbitRadiusZ: 4.0,
-    tilt: [0.24, 0.18, -0.15],
+    color: '#475569',
+    glowColor: '#cbd5e1',
+    orbitRadiusX: 8.2,
+    orbitRadiusZ: 4.2,
+    tilt: [0.22, 0.15, -0.12],
     speed: 0.28,
-    size: 0.62
+    size: 0.6
   },
   {
     id: 'github',
-    name: 'GitHub Copilot',
+    name: 'GitHub',
     provider: 'GITHUB',
-    color: '#a855f7',
-    glowColor: '#c084fc',
-    gradientTop: '#e9d5ff',
-    gradientBottom: '#7e22ce',
-    orbitRadiusX: 5.3,
-    orbitRadiusZ: 2.8,
-    tilt: [-0.18, 0.38, -0.06],
-    speed: 0.52,
+    color: '#7c3aed',
+    glowColor: '#a855f7',
+    orbitRadiusX: 5.6,
+    orbitRadiusZ: 3.0,
+    tilt: [-0.18, 0.35, -0.05],
+    speed: 0.5,
     size: 0.68
   }
 ];
@@ -83,14 +74,14 @@ const SERVICES: ServiceNode[] = [
 function BrandLogo({ id }: { id: string }) {
   if (id === 'github') {
     return (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="white">
+      <svg className="w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.95)]" viewBox="0 0 24 24" fill="white">
         <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
       </svg>
     );
   }
   if (id === 'openai') {
     return (
-      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <svg className="w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.95)]" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a4 4 0 0 0-4 4v2" />
         <path d="M16 10a4 4 0 0 0-4-4H8" />
         <path d="M12 22a4 4 0 0 0 4-4v-2" />
@@ -101,170 +92,105 @@ function BrandLogo({ id }: { id: string }) {
   }
   if (id === 'gemini') {
     return (
-      <svg className="w-9 h-9" viewBox="0 0 24 24" fill="white">
+      <svg className="w-9 h-9 drop-shadow-[0_0_10px_rgba(255,255,255,1)]" viewBox="0 0 24 24" fill="white">
         <path d="M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z" />
       </svg>
     );
   }
   return (
-    <svg className="w-7 h-7" viewBox="0 0 24 24" fill="white">
+    <svg className="w-7 h-7 drop-shadow-[0_0_10px_rgba(255,255,255,0.95)]" viewBox="0 0 24 24" fill="white">
       <path d="M12 3L22 20H2L12 3Z" />
     </svg>
   );
 }
 
-// Skapar en lysande glasbubbel-textur med spegelglans
-function createGlassBubbleTexture(colorTop: string, colorBottom: string, glowColor: string) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-
-  const cx = 256;
-  const cy = 256;
-  const r = 240;
-
-  // 1. Mjuk yttre färgaura
-  const aura = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r);
-  aura.addColorStop(0, 'rgba(0,0,0,0)');
-  aura.addColorStop(0.8, glowColor + '33');
-  aura.addColorStop(1, glowColor + 'aa');
-  ctx.fillStyle = aura;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 2. Inre gradientkropp (cyan/magenta eller varumärkets färg)
-  const bodyGrad = ctx.createLinearGradient(cx - r * 0.5, cy - r * 0.6, cx + r * 0.5, cy + r * 0.6);
-  bodyGrad.addColorStop(0, colorTop + 'cc');
-  bodyGrad.addColorStop(0.5, colorBottom + 'bb');
-  bodyGrad.addColorStop(1, colorBottom + 'ee');
-  ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 3. Topp-reflex (såpbubblans glänsande båge)
-  const sheen = ctx.createLinearGradient(cx, cy - r * 0.85, cx, cy - r * 0.2);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.95)');
-  sheen.addColorStop(0.5, 'rgba(255,255,255,0.4)');
-  sheen.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = sheen;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - r * 0.52, r * 0.58, r * 0.28, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 4. Undre subtil kantreflex
-  const bottomRim = ctx.createRadialGradient(cx, cy + r * 0.6, 10, cx, cy + r * 0.6, r * 0.4);
-  bottomRim.addColorStop(0, 'rgba(255,255,255,0.6)');
-  bottomRim.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = bottomRim;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2);
-  ctx.fill();
-
-  return new THREE.CanvasTexture(canvas);
+function useGlowTexture(colorHex: string) {
+  return useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, colorHex);
+      grad.addColorStop(0.35, colorHex + '99');
+      grad.addColorStop(0.7, colorHex + '33');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, [colorHex]);
 }
 
-// Den stora centrala glasbubblan
-function FacitCoreBubble() {
-  const [waveOffset, setWaveOffset] = useState(0);
-
-  const texture = useMemo(() => {
-    return createGlassBubbleTexture('#38bdf8', '#c084fc', '#818cf8');
-  }, []);
-
-  useFrame((state) => {
-    setWaveOffset(state.clock.getElapsedTime() * 3.2);
-  });
-
-  const waveD = useMemo(() => {
-    let d = "M 15 100 ";
-    for (let x = 15; x <= 185; x += 4) {
-      const y = 100 + Math.sin(x * 0.085 + waveOffset) * 26 + Math.cos(x * 0.15 - waveOffset * 0.8) * 8;
-      d += `L ${x} ${y} `;
+function useCoreGradientTexture() {
+  return useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const grad = ctx.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, '#38bdf8');
+      grad.addColorStop(0.5, '#818cf8');
+      grad.addColorStop(1, '#c026d3');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
     }
-    return d;
-  }, [waveOffset]);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+}
+
+function CentralVibeBubble() {
+  const meshRef = useRef<THREE.Mesh>(null!);
+  const glowTex = useGlowTexture('#38bdf8');
+  const coreGrad = useCoreGradientTexture();
+
+  useFrame((_, delta) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y += delta * 0.15;
+    }
+  });
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Självlysande glasbubbla med facit-gradient */}
-      <mesh>
-        <planeGeometry args={[4.5, 4.5]} />
-        <meshBasicMaterial
-          map={texture}
-          transparent
-          depthWrite={false}
-          side={THREE.DoubleSide}
+      {glowTex && (
+        <sprite scale={[6.2, 6.2, 1]}>
+          <spriteMaterial
+            map={glowTex}
+            transparent
+            opacity={0.4}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </sprite>
+      )}
+
+      <pointLight color="#38bdf8" intensity={2.8} distance={8} />
+
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[2.0, 64, 64]} />
+        <meshPhysicalMaterial
+          map={coreGrad || undefined}
+          roughness={0.25}
+          metalness={0.08}
+          clearcoat={1.0}
+          clearcoatRoughness={0.05}
+          emissive="#6366f1"
+          emissiveIntensity={0.45}
         />
       </mesh>
-
-      {/* Bakomliggande mjuk neon-aura */}
-      <mesh position={[0, 0, -0.1]}>
-        <circleGeometry args={[2.5, 32]} />
-        <meshBasicMaterial
-          color="#818cf8"
-          transparent
-          opacity={0.25}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-
-      {/* Krispig vit vågform centrerad i bubblan */}
-      <Html center transform distanceFactor={9} className="pointer-events-none select-none">
-        <div className="relative w-64 h-64 flex items-center justify-center">
-          <svg className="w-full h-full relative z-10" viewBox="0 0 200 200">
-            <path
-              d={waveD}
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth="5"
-              strokeLinecap="round"
-              filter="drop-shadow(0 0 12px rgba(255,255,255,0.95))"
-            />
-          </svg>
-        </div>
-      </Html>
     </group>
   );
 }
 
-// Fina elliptiska omloppsbanor
-function FacitOrbitRing({
-  radiusX,
-  radiusZ,
-  color,
-  active
-}: {
-  radiusX: number;
-  radiusZ: number;
-  color: string;
-  active: boolean;
-}) {
-  const lineGeometry = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    const segments = 128;
-    for (let i = 0; i <= segments; i++) {
-      const theta = (i / segments) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(theta) * radiusX, 0, Math.sin(theta) * radiusZ));
-    }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [radiusX, radiusZ]);
-
-  return (
-    // @ts-expect-error Three line
-    <line geometry={lineGeometry}>
-      <lineBasicMaterial
-        color={color}
-        transparent
-        opacity={active ? 0.8 : 0.35}
-      />
-    </line>
-  );
-}
-
-function PlanetBubbleNode({
+function ServiceGlassOrb({
   node,
   isSelected,
   onSelect
@@ -276,10 +202,7 @@ function PlanetBubbleNode({
   const groupRef = useRef<THREE.Group>(null!);
   const [hovered, setHovered] = useState(false);
   const angleRef = useRef<number>(Math.random() * Math.PI * 2);
-
-  const texture = useMemo(() => {
-    return createGlassBubbleTexture(node.gradientTop, node.gradientBottom, node.glowColor);
-  }, [node]);
+  const glowTex = useGlowTexture(node.glowColor);
 
   useFrame((_, delta) => {
     angleRef.current += node.speed * delta * 0.4;
@@ -288,19 +211,31 @@ function PlanetBubbleNode({
 
     if (groupRef.current) {
       groupRef.current.position.set(x, 0, z);
-      const scale = hovered || isSelected ? 1.25 : 1.0;
-      groupRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
+      const targetScale = hovered || isSelected ? 1.25 : 1.0;
+      groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
     }
   });
 
+  const orbitGeometry = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const segments = 120;
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(theta) * node.orbitRadiusX, 0, Math.sin(theta) * node.orbitRadiusZ));
+    }
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  }, [node.orbitRadiusX, node.orbitRadiusZ]);
+
   return (
     <group rotation={node.tilt}>
-      <FacitOrbitRing
-        radiusX={node.orbitRadiusX}
-        radiusZ={node.orbitRadiusZ}
-        color={node.glowColor}
-        active={isSelected || hovered}
-      />
+      {/* @ts-expect-error Three line */}
+      <line geometry={orbitGeometry}>
+        <lineBasicMaterial
+          color={node.glowColor}
+          transparent
+          opacity={isSelected || hovered ? 0.75 : 0.35}
+        />
+      </line>
 
       <group
         ref={groupRef}
@@ -318,36 +253,33 @@ function PlanetBubbleNode({
           document.body.style.cursor = 'auto';
         }}
       >
-        {/* Självlysande glasbubbla */}
+        {glowTex && (
+          <sprite scale={[node.size * 3.4, node.size * 3.4, 1]}>
+            <spriteMaterial
+              map={glowTex}
+              transparent
+              opacity={hovered || isSelected ? 0.75 : 0.45}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </sprite>
+        )}
+
         <mesh>
-          <planeGeometry args={[node.size * 2.4, node.size * 2.4]} />
-          <meshBasicMaterial
-            map={texture}
-            transparent
-            depthWrite={false}
-            side={THREE.DoubleSide}
+          <sphereGeometry args={[node.size, 48, 48]} />
+          <meshPhysicalMaterial
+            color={node.color}
+            emissive={node.glowColor}
+            emissiveIntensity={hovered || isSelected ? 0.65 : 0.4}
+            roughness={0.22}
+            metalness={0.08}
+            clearcoat={1.0}
+            clearcoatRoughness={0.06}
           />
         </mesh>
 
-        {/* Ljus-aura bakom bubblan */}
-        <mesh position={[0, 0, -0.05]}>
-          <circleGeometry args={[node.size * 1.3, 32]} />
-          <meshBasicMaterial
-            color={node.glowColor}
-            transparent
-            opacity={hovered || isSelected ? 0.5 : 0.25}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-
-        {/* Brand Logo centrerad inuti bubblan */}
-        <Html center transform distanceFactor={10} className="pointer-events-none select-none">
-          <div 
-            className="flex items-center justify-center p-2 rounded-full"
-            style={{
-              filter: `drop-shadow(0 0 14px rgba(255,255,255,0.9))`
-            }}
-          >
+        <Html center className="pointer-events-none select-none">
+          <div className="flex items-center justify-center p-2 rounded-full">
             <BrandLogo id={node.id} />
           </div>
         </Html>
@@ -357,15 +289,18 @@ function PlanetBubbleNode({
 }
 
 export default function VibeTrackerDashboard() {
-  const [selectedNode, setSelectedNode] = useState<ServiceNode | null>(SERVICES[0]);
+  const [activeNode, setActiveNode] = useState<ServiceNode | null>(null);
 
   return (
-    <div className="relative w-full h-screen bg-[#090b10] overflow-hidden select-none font-sans text-white">
-      {/* Bakgrundsglöd i centrum */}
+    <div 
+      className="relative w-full h-screen bg-[#07090e] overflow-hidden select-none font-sans text-white"
+      onClick={() => setActiveNode(null)}
+    >
+      {/* Bakgrundsglöd */}
       <div 
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] rounded-full pointer-events-none opacity-40"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none opacity-20"
         style={{
-          background: 'radial-gradient(circle, rgba(129,140,248,0.22) 0%, rgba(56,189,248,0.12) 40%, transparent 70%)'
+          background: 'radial-gradient(circle, rgba(56,189,248,0.25) 0%, rgba(168,85,247,0.12) 40%, transparent 70%)'
         }}
       />
 
@@ -407,35 +342,70 @@ export default function VibeTrackerDashboard() {
 
       {/* 3D Canvas */}
       <Canvas
-        camera={{ position: [0, 4.6, 11], fov: 38 }}
+        camera={{ position: [0, 4.5, 12], fov: 38 }}
         className="w-full h-full"
       >
-        <color attach="background" args={['#090b10']} />
+        <color attach="background" args={['#07090e']} />
 
-        <ambientLight intensity={1.0} />
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[10, 14, 10]} intensity={2.6} />
 
-        <Float speed={1.2} rotationIntensity={0.03} floatIntensity={0.08}>
-          <FacitCoreBubble />
+        <Float speed={1.2} rotationIntensity={0.04} floatIntensity={0.1}>
+          <CentralVibeBubble />
           {SERVICES.map((node) => (
-            <PlanetBubbleNode
+            <ServiceGlassOrb
               key={node.id}
               node={node}
-              isSelected={selectedNode?.id === node.id}
-              onSelect={setSelectedNode}
+              isSelected={activeNode?.id === node.id}
+              onSelect={(n) => setActiveNode(n)}
             />
           ))}
         </Float>
 
+        <EffectComposer>
+          <Bloom
+            luminanceThreshold={0.2}
+            luminanceSmoothing={0.9}
+            intensity={1.2}
+          />
+        </EffectComposer>
+
         <OrbitControls
           enablePan={false}
           minDistance={6}
-          maxDistance={20}
+          maxDistance={22}
           maxPolarAngle={Math.PI / 2 - 0.05}
         />
       </Canvas>
 
-      {/* Text under kärnan (som i facit) */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 pointer-events-none z-10 text-center">
+      {/* RUTA VID KLICK (Tom glassmorphism-ruta som speglar planetens glow) */}
+      {activeNode && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-28 left-1/2 -translate-x-1/2 z-30 w-[360px] h-[220px] rounded-2xl border border-white/15 bg-[#0b0f17]/75 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.7)] p-4 transition-all duration-300 animate-in fade-in zoom-in-95 overflow-hidden"
+        >
+          {/* Speglande glöd i överkant som skiftar med vald planets färg */}
+          <div 
+            className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full pointer-events-none opacity-40 filter blur-xl transition-all duration-500"
+            style={{
+              backgroundColor: activeNode.glowColor
+            }}
+          />
+
+          {/* Stängningsknapp */}
+          <div className="flex justify-end">
+            <button 
+              onClick={() => setActiveNode(null)}
+              className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-white/5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Text under kärnan */}
+      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-10 text-center">
         <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-400 font-semibold mb-1">
           Credits Tracking
         </div>
