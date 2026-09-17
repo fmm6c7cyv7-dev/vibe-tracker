@@ -5,7 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Html, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { Settings, Bell, X, GripHorizontal, Activity, Zap, DollarSign, TrendingUp } from 'lucide-react';
+import { Settings, Bell, X, GripHorizontal, Activity, Zap, DollarSign, TrendingUp, Maximize2, Minimize2 } from 'lucide-react';
 
 export interface TelemetryMetrics {
   status: 'healthy' | 'warning' | 'critical';
@@ -54,6 +54,10 @@ interface OpenCard {
   nodeId: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
+  isExpanded?: boolean;
+  prevSize?: { width: number; height: number };
   zIndex: number;
 }
 
@@ -510,16 +514,33 @@ function DraggableCard({
   card,
   onClose,
   onBringToFront,
-  onUpdatePosition
+  onUpdatePosition,
+  onUpdateSize,
+  onToggleExpand
 }: {
   node: ServiceNode;
   card: OpenCard;
   onClose: () => void;
   onBringToFront: () => void;
   onUpdatePosition: (x: number, y: number) => void;
+  onUpdateSize: (width: number, height: number) => void;
+  onToggleExpand: () => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0 });
+
+  type ResizeDirection = 'e' | 's' | 'se' | 'w' | 'sw';
+
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStateRef = useRef<{
+    dir: ResizeDirection;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    cardX: number;
+    cardY: number;
+  } | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     onBringToFront();
@@ -552,6 +573,63 @@ function DraggableCard({
     }
   };
 
+  const handleResizeStart = (e: React.PointerEvent, dir: ResizeDirection) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onBringToFront();
+    setIsResizing(true);
+    resizeStateRef.current = {
+      dir,
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: card.width,
+      startHeight: card.height,
+      cardX: card.x,
+      cardY: card.y
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleResizeMove = (e: React.PointerEvent) => {
+    if (!resizeStateRef.current) return;
+    const { dir, startX, startY, startWidth, startHeight, cardX, cardY } = resizeStateRef.current;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+
+    let newWidth = startWidth;
+    let newHeight = startHeight;
+    let newX = cardX;
+    let newY = cardY;
+
+    if (dir === 'e' || dir === 'se') {
+      newWidth = Math.max(340, Math.min(1100, Math.round(startWidth + deltaX)));
+    }
+    if (dir === 's' || dir === 'se' || dir === 'sw') {
+      newHeight = Math.max(280, Math.min(900, Math.round(startHeight + deltaY)));
+    }
+    if (dir === 'w' || dir === 'sw') {
+      const candidateWidth = Math.max(340, Math.min(1100, Math.round(startWidth - deltaX)));
+      const diff = candidateWidth - startWidth;
+      newWidth = candidateWidth;
+      newX = cardX - diff;
+    }
+
+    onUpdateSize(newWidth, newHeight);
+    if (newX !== cardX || newY !== cardY) {
+      onUpdatePosition(newX, newY);
+    }
+  };
+
+  const handleResizeEnd = (e: React.PointerEvent) => {
+    if (resizeStateRef.current) {
+      resizeStateRef.current = null;
+      setIsResizing(false);
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
   const isFreeTier = node.metrics.budgetCap === 0;
   const isFixedPlan = node.id === 'github';
 
@@ -574,10 +652,16 @@ function DraggableCard({
       style={{
         left: `${card.x}px`,
         top: `${card.y}px`,
+        width: `${card.width}px`,
+        height: `${card.height}px`,
         zIndex: card.zIndex
       }}
-      className={`absolute w-[400px] h-[340px] rounded-2xl border border-white/15 bg-[#0b0f17]/85 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] select-none overflow-hidden transition-shadow duration-200 flex flex-col ${
-        isDragging ? 'shadow-[0_30px_70px_rgba(0,0,0,0.95)] ring-1 ring-white/20' : ''
+      className={`absolute rounded-2xl border bg-[#0b0f17]/85 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] select-none overflow-hidden transition-[box-shadow,border-color] duration-150 flex flex-col ${
+        isResizing
+          ? 'border-cyan-400/60 ring-2 ring-cyan-400/30 shadow-[0_0_30px_rgba(56,189,248,0.25)]'
+          : isDragging
+          ? 'border-white/30 shadow-[0_30px_70px_rgba(0,0,0,0.95)] ring-1 ring-white/25'
+          : 'border-white/15'
       }`}
     >
       <div
@@ -614,19 +698,38 @@ function DraggableCard({
           )}
         </div>
 
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-white/10"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand();
+            }}
+            title={card.isExpanded ? "Återställ storlek" : "Maximera tavla"}
+            className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-white/10"
+          >
+            {card.isExpanded ? (
+              <Minimize2 className="w-3.5 h-3.5" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            title="Stäng"
+            className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-white/10"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="relative z-10 w-full flex-1 p-4 flex flex-col justify-between text-xs">
+      <div className="relative z-10 w-full flex-1 p-4 flex flex-col justify-between text-xs overflow-y-auto gap-2.5">
         <div className="grid grid-cols-2 gap-2.5">
           <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
             <div className="flex items-center justify-between text-slate-400 mb-1">
@@ -751,6 +854,63 @@ function DraggableCard({
           <span>PROMPT: {(node.metrics.tokens24h.prompt / 1000).toFixed(0)}k | COMPL: {(node.metrics.tokens24h.completion / 1000).toFixed(0)}k</span>
         </div>
       </div>
+
+      {/* Höger kant resize */}
+      <div
+        onPointerDown={(e) => handleResizeStart(e, 'e')}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        title="Dra för att ändra bredd"
+        className="absolute top-3 bottom-3 -right-1.5 w-3.5 cursor-ew-resize hover:bg-cyan-400/30 active:bg-cyan-400/50 rounded-r z-30 transition-colors"
+      />
+
+      {/* Vänster kant resize */}
+      <div
+        onPointerDown={(e) => handleResizeStart(e, 'w')}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        title="Dra för att ändra bredd"
+        className="absolute top-3 bottom-3 -left-1.5 w-3.5 cursor-ew-resize hover:bg-cyan-400/30 active:bg-cyan-400/50 rounded-l z-30 transition-colors"
+      />
+
+      {/* Underkant resize */}
+      <div
+        onPointerDown={(e) => handleResizeStart(e, 's')}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        title="Dra för att ändra höjd"
+        className="absolute -bottom-1.5 left-4 right-4 h-3.5 cursor-ns-resize hover:bg-cyan-400/30 active:bg-cyan-400/50 rounded-b z-30 transition-colors"
+      />
+
+      {/* Nedre vänstra hörnet */}
+      <div
+        onPointerDown={(e) => handleResizeStart(e, 'sw')}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        title="Dra för att ändra bredd och höjd"
+        className="absolute -bottom-1.5 -left-1.5 w-6 h-6 cursor-nesw-resize hover:bg-cyan-400/40 active:bg-cyan-400/60 rounded-bl-xl z-40 transition-colors"
+      />
+
+      {/* Nedre högra hörnet med snygg grepp-indikator */}
+      <div
+        onPointerDown={(e) => handleResizeStart(e, 'se')}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        title="Dra för att expandera eller minska tavlan"
+        className="absolute bottom-0 right-0 w-8 h-8 cursor-nwse-resize flex items-end justify-end p-1.5 z-40 group hover:bg-cyan-400/25 active:bg-cyan-400/40 rounded-br-2xl transition-all"
+      >
+        <svg
+          className="w-4 h-4 text-slate-400 group-hover:text-cyan-300 transition-colors pointer-events-none drop-shadow-[0_0_4px_rgba(56,189,248,0.5)]"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        >
+          <path d="M21 15L15 21" />
+          <path d="M21 9L9 21" />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -841,12 +1001,24 @@ export default function VibeTrackerDashboard() {
       }
 
       const offset = prev.length * 30;
-      const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 200 + offset) : 100;
+      const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 210 + offset) : 100;
       const initialY = 120 + offset;
       const nextZ = topZ + 1;
       setTopZ(nextZ);
+      const initialWidth = 420;
+      const initialHeight = 355;
 
-      return [...prev, { nodeId: node.id, x: initialX, y: initialY, zIndex: nextZ }];
+      return [
+        ...prev,
+        {
+          nodeId: node.id,
+          x: initialX,
+          y: initialY,
+          width: initialWidth,
+          height: initialHeight,
+          zIndex: nextZ
+        }
+      ];
     });
   };
 
@@ -861,6 +1033,36 @@ export default function VibeTrackerDashboard() {
   const handleUpdatePosition = (nodeId: string, x: number, y: number) => {
     setOpenCards((prev) =>
       prev.map((c) => (c.nodeId === nodeId ? { ...c, x, y } : c))
+    );
+  };
+
+  const handleUpdateSize = (nodeId: string, width: number, height: number) => {
+    setOpenCards((prev) =>
+      prev.map((c) => (c.nodeId === nodeId ? { ...c, width, height, isExpanded: false } : c))
+    );
+  };
+
+  const handleToggleExpand = (nodeId: string) => {
+    setOpenCards((prev) =>
+      prev.map((c) => {
+        if (c.nodeId !== nodeId) return c;
+        if (c.isExpanded) {
+          return {
+            ...c,
+            isExpanded: false,
+            width: c.prevSize?.width || 420,
+            height: c.prevSize?.height || 355
+          };
+        } else {
+          return {
+            ...c,
+            isExpanded: true,
+            prevSize: { width: c.width, height: c.height },
+            width: Math.min(620, typeof window !== 'undefined' ? window.innerWidth - 60 : 620),
+            height: Math.min(520, typeof window !== 'undefined' ? window.innerHeight - 100 : 520)
+          };
+        }
+      })
     );
   };
 
@@ -987,6 +1189,8 @@ export default function VibeTrackerDashboard() {
             onClose={() => handleCloseCard(card.nodeId)}
             onBringToFront={() => handleBringToFront(card.nodeId)}
             onUpdatePosition={(x, y) => handleUpdatePosition(card.nodeId, x, y)}
+            onUpdateSize={(w, h) => handleUpdateSize(card.nodeId, w, h)}
+            onToggleExpand={() => handleToggleExpand(card.nodeId)}
           />
         );
       })}
