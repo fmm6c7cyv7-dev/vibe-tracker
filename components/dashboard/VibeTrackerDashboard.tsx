@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Float, Html } from '@react-three/drei';
+import { OrbitControls, Float, Html, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { Settings, Bell, X, GripHorizontal } from 'lucide-react';
@@ -154,6 +154,79 @@ function useCoreGradientTexture() {
   }, []);
 }
 
+// 3D Volumetriskt Stjärnfall (syns alltid oavsett kamerarotation)
+function ShootingStar() {
+  const groupRef = useRef<THREE.Group>(null!);
+  const [active, setActive] = useState(false);
+  const progressRef = useRef(1);
+  const timerRef = useRef(0);
+  const nextIntervalRef = useRef(4.0 + Math.random() * 2.0); // 4 till 6 sekunder
+  const startPos = useRef(new THREE.Vector3());
+  const endPos = useRef(new THREE.Vector3());
+
+  useFrame((_, delta) => {
+    if (!active) {
+      timerRef.current += delta;
+      if (timerRef.current >= nextIntervalRef.current) {
+        timerRef.current = 0;
+        nextIntervalRef.current = 4.0 + Math.random() * 2.0;
+
+        // Skjut snett genom synfältets övre del
+        const x = 12 + Math.random() * 6;
+        const y = 8 + Math.random() * 4;
+        const z = -4 - Math.random() * 6;
+        startPos.current.set(x, y, z);
+        endPos.current.set(x - 28, y - 16, z + 2);
+        progressRef.current = 0;
+        setActive(true);
+      }
+    } else {
+      progressRef.current += delta * 2.2;
+      if (progressRef.current >= 1) {
+        setActive(false);
+      } else if (groupRef.current) {
+        groupRef.current.position.lerpVectors(
+          startPos.current,
+          endPos.current,
+          progressRef.current
+        );
+      }
+    }
+  });
+
+  if (!active) return null;
+
+  const opacity = Math.sin(progressRef.current * Math.PI) * 0.9;
+
+  return (
+    <group ref={groupRef} rotation={[0, 0, 0.52]}>
+      {/* Ljusande meteorit-svans (3D-cylinder så den syns i alla vinklar) */}
+      <mesh position={[-2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.02, 0.08, 5, 12]} />
+        <meshBasicMaterial
+          color="#7dd3fc"
+          transparent
+          opacity={opacity * 0.75}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Skarp vit kärna */}
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.12, 16, 16]} />
+        <meshBasicMaterial
+          color="#ffffff"
+          transparent
+          opacity={opacity}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function CentralVibeBubble() {
   const meshRef = useRef<THREE.Mesh>(null!);
   const glowTex = useGlowTexture('#38bdf8');
@@ -295,7 +368,6 @@ function ServiceGlassOrb({
   );
 }
 
-// DRAGGABLE GLASSMORPHISM TAVLA MED STACKING
 function DraggableCard({
   card,
   onClose,
@@ -353,7 +425,6 @@ function DraggableCard({
         isDragging ? 'shadow-[0_30px_70px_rgba(0,0,0,0.95)] ring-1 ring-white/20' : ''
       }`}
     >
-      {/* Subtilt spegelblänk över glaset */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -361,7 +432,6 @@ function DraggableCard({
         }}
       />
 
-      {/* Speglande glöd i överkant som matchar vald planets neonfärg */}
       <div
         className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-32 rounded-full pointer-events-none opacity-45 filter blur-2xl transition-all duration-500"
         style={{
@@ -369,7 +439,6 @@ function DraggableCard({
         }}
       />
 
-      {/* DRAG-HEADER / RUBRIKLIST */}
       <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -396,7 +465,6 @@ function DraggableCard({
         </button>
       </div>
 
-      {/* TOM ARBETSYTA FÖR INFORMATION/GRAFER */}
       <div className="relative z-10 w-full h-[180px] p-4 flex items-center justify-center text-slate-500 text-xs tracking-widest uppercase">
         {/* Tom och ren */}
       </div>
@@ -412,13 +480,11 @@ export default function VibeTrackerDashboard() {
     setOpenCards((prev) => {
       const existing = prev.find((c) => c.node.id === node.id);
       if (existing) {
-        // Om den redan är öppen, lyft den överst i stacken
         const nextZ = topZ + 1;
         setTopZ(nextZ);
         return prev.map((c) => (c.node.id === node.id ? { ...c, zIndex: nextZ } : c));
       }
 
-      // Placera ny tavla med en snygg trappstegs-offset för stacking
       const offset = prev.length * 30;
       const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 190 + offset) : 100;
       const initialY = 120 + offset;
@@ -449,7 +515,7 @@ export default function VibeTrackerDashboard() {
 
   return (
     <div className="relative w-full h-screen bg-[#07090e] overflow-hidden select-none font-sans text-white">
-      {/* Bakgrundsglöd */}
+      {/* Bakgrundsglöd runt mitten */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none opacity-20"
         style={{
@@ -500,6 +566,20 @@ export default function VibeTrackerDashboard() {
       >
         <color attach="background" args={['#07090e']} />
 
+        {/* Lugna stjärnor */}
+        <Stars
+          radius={65}
+          depth={50}
+          count={1800}
+          factor={2.4}
+          saturation={0.3}
+          fade
+          speed={0}
+        />
+
+        {/* 3D Stjärnfall med garanterad synlighet */}
+        <ShootingStar />
+
         <ambientLight intensity={0.4} />
         <directionalLight position={[10, 14, 10]} intensity={2.6} />
 
@@ -531,7 +611,7 @@ export default function VibeTrackerDashboard() {
         />
       </Canvas>
 
-      {/* DRAGGABLE TAVLOR MED STACKING */}
+      {/* Draggable Cards */}
       {openCards.map((card) => (
         <DraggableCard
           key={card.node.id}
