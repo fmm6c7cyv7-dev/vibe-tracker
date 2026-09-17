@@ -9,6 +9,20 @@ import { Settings, Bell, X, GripHorizontal, Activity, Zap, DollarSign, TrendingU
 
 export interface TelemetryMetrics {
   status: 'healthy' | 'warning' | 'critical';
+  tier?: string;
+  plan?: string;
+  subscription?: string;
+  monthlyPrice?: number;
+  creditBalance?: number;
+  spendLimit?: number;
+  autoReload?: boolean;
+  aiCredits?: {
+    used: number;
+    total: number;
+    resetDate: string;
+  };
+  meteredUsage?: number;
+  includedUsage?: number;
   tokens24h: {
     prompt: number;
     completion: number;
@@ -57,14 +71,18 @@ const INITIAL_SERVICES: ServiceNode[] = [
     size: 0.65,
     metrics: {
       status: 'healthy',
+      tier: 'Usage tier 1',
+      creditBalance: 2.80,
+      spendLimit: 10.00,
+      autoReload: false,
       tokens24h: {
         prompt: 1420500,
         completion: 389200,
         total: 1809700
       },
       burnRate: 142.5,
-      costMonth: 342.8,
-      budgetCap: 400.0,
+      costMonth: 2.80,
+      budgetCap: 10.00,
       latencyMs: 320,
       latencyHistory: [310, 340, 290, 420, 315, 330, 295, 305, 360, 320],
       uptimePercent: 99.98
@@ -83,14 +101,15 @@ const INITIAL_SERVICES: ServiceNode[] = [
     size: 0.72,
     metrics: {
       status: 'healthy',
+      tier: 'Developer API',
       tokens24h: {
         prompt: 2840000,
         completion: 820000,
         total: 3660000
       },
       burnRate: 268.0,
-      costMonth: 184.2,
-      budgetCap: 250.0,
+      costMonth: 8.40,
+      budgetCap: 30.0,
       latencyMs: 245,
       latencyHistory: [260, 250, 240, 270, 230, 245, 238, 255, 240, 245],
       uptimePercent: 99.99
@@ -108,17 +127,18 @@ const INITIAL_SERVICES: ServiceNode[] = [
     speed: 0.28,
     size: 0.6,
     metrics: {
-      status: 'warning',
+      status: 'healthy',
+      plan: 'Hobby',
       tokens24h: {
         prompt: 620000,
         completion: 140000,
         total: 760000
       },
       burnRate: 48.2,
-      costMonth: 82.5,
-      budgetCap: 90.0,
+      costMonth: 0.0,
+      budgetCap: 0.0,
       latencyMs: 85,
-      latencyHistory: [78, 82, 85, 110, 142, 95, 88, 84, 89, 85],
+      latencyHistory: [78, 82, 85, 110, 95, 95, 88, 84, 89, 85],
       uptimePercent: 99.85
     }
   },
@@ -135,14 +155,23 @@ const INITIAL_SERVICES: ServiceNode[] = [
     size: 0.68,
     metrics: {
       status: 'healthy',
+      subscription: 'Copilot Max',
+      monthlyPrice: 100.0,
+      aiCredits: {
+        used: 8876,
+        total: 20000,
+        resetDate: '2026-10-01'
+      },
+      meteredUsage: 116.29,
+      includedUsage: 109.29,
       tokens24h: {
         prompt: 980000,
         completion: 410000,
         total: 1390000
       },
       burnRate: 112.4,
-      costMonth: 38.0,
-      budgetCap: 50.0,
+      costMonth: 100.0,
+      budgetCap: 100.0,
       latencyMs: 410,
       latencyHistory: [390, 420, 405, 430, 395, 415, 440, 400, 395, 410],
       uptimePercent: 99.94
@@ -523,10 +552,12 @@ function DraggableCard({
     }
   };
 
-  const budgetUsagePercent = Math.min(
-    100,
-    Math.round((node.metrics.costMonth / node.metrics.budgetCap) * 100)
-  );
+  const isFreeTier = node.metrics.budgetCap === 0;
+  const isFixedPlan = node.id === 'github';
+
+  const budgetUsagePercent = isFreeTier
+    ? 0
+    : Math.min(100, Math.round((node.metrics.costMonth / node.metrics.budgetCap) * 100));
 
   const budgetBarColor =
     budgetUsagePercent >= 95
@@ -576,6 +607,11 @@ function DraggableCard({
             style={{ backgroundColor: node.glowColor }}
           />
           <span>{node.name}</span>
+          {(node.metrics.subscription || node.metrics.tier || node.metrics.plan) && (
+            <span className="ml-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/10 lowercase">
+              {node.metrics.subscription || node.metrics.tier || node.metrics.plan}
+            </span>
+          )}
         </div>
 
         <button
@@ -628,26 +664,64 @@ function DraggableCard({
         </div>
 
         <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
-          <div className="flex items-center justify-between text-slate-400 mb-1.5">
-            <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
-              <DollarSign className="w-3 h-3 text-emerald-400" /> Månadskostnad
-            </span>
-            <span className="font-mono text-[11px] text-slate-300">
-              ${node.metrics.costMonth.toFixed(2)} /${node.metrics.budgetCap.toFixed(1)}
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${budgetBarColor}`}
-              style={{ width: `${budgetUsagePercent}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center mt-1 text-[9px] text-slate-500 font-mono">
-            <span>Förbrukat: {budgetUsagePercent}%</span>
-            {budgetUsagePercent >= 80 && (
-              <span className="text-amber-400 font-semibold tracking-wider uppercase">Tröskelvarning</span>
-            )}
-          </div>
+          {node.metrics.aiCredits ? (
+            <>
+              <div className="flex items-center justify-between text-slate-400 mb-1.5">
+                <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+                  <DollarSign className="w-3 h-3 text-emerald-400" /> Copilot Max (${node.metrics.monthlyPrice || 100}/mån)
+                </span>
+                <span className="font-mono text-[10px] text-slate-300">
+                  {node.metrics.aiCredits.used.toLocaleString()} / {node.metrics.aiCredits.total.toLocaleString()} credits
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500 bg-purple-400"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((node.metrics.aiCredits.used / node.metrics.aiCredits.total) * 100)
+                    )}%`
+                  }}
+                />
+              </div>
+              <div className="flex justify-between items-center mt-1 text-[9px] text-slate-400 font-mono">
+                <span>Återställs: {node.metrics.aiCredits.resetDate}</span>
+                <span>Inkl: ${node.metrics.includedUsage?.toFixed(2)} | Metered: ${node.metrics.meteredUsage?.toFixed(2)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-slate-400 mb-1.5">
+                <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+                  <DollarSign className="w-3 h-3 text-emerald-400" /> Månadskostnad
+                </span>
+                <span className="font-mono text-[11px] text-slate-300">
+                  {isFreeTier
+                    ? '$0.00 (Hobby / Fri kvot)'
+                    : `$${node.metrics.costMonth.toFixed(2)} / $${node.metrics.budgetCap.toFixed(1)}`}
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${budgetBarColor}`}
+                  style={{ width: isFreeTier ? '0%' : `${budgetUsagePercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center mt-1 text-[9px] text-slate-500 font-mono">
+                <span>
+                  {isFreeTier
+                    ? 'Hobby-plan: Inga grundavgifter'
+                    : node.metrics.creditBalance !== undefined
+                    ? `Förbrukat: ${budgetUsagePercent}% | Saldo: $${node.metrics.creditBalance.toFixed(2)}`
+                    : `Förbrukat: ${budgetUsagePercent}%`}
+                </span>
+                {!isFreeTier && budgetUsagePercent >= 80 && (
+                  <span className="text-amber-400 font-semibold tracking-wider uppercase">Tröskelvarning</span>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
@@ -687,6 +761,20 @@ export default function VibeTrackerDashboard() {
   const [topZ, setTopZ] = useState(40);
 
   useEffect(() => {
+    fetch('/api/telemetry')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data.services)) {
+          setServices((prev) =>
+            prev.map((s) => {
+              const remote = data.services.find((r: { id: string }) => r.id === s.id);
+              return remote ? { ...s, metrics: { ...s.metrics, ...remote } } : s;
+            })
+          );
+        }
+      })
+      .catch(() => {});
+
     const interval = setInterval(() => {
       setServices((prev) =>
         prev.map((service) => {
@@ -697,14 +785,22 @@ export default function VibeTrackerDashboard() {
           const promptPortion = Math.round(newTokens * 0.72);
           const completionPortion = newTokens - promptPortion;
 
-          const costAddition = (newTokens / 1000000) * (service.id === 'openai' ? 3.0 : service.id === 'gemini' ? 1.5 : 1.0);
+          // Endast pay-as-you-go (OpenAI och Gemini) ackumulerar löpande token-kostnader
+          const costAddition =
+            service.id === 'openai'
+              ? (newTokens / 1000000) * 3.0
+              : service.id === 'gemini'
+              ? (newTokens / 1000000) * 1.5
+              : 0;
+
           const nextCost = service.metrics.costMonth + costAddition;
 
           const latencyDelta = Math.round((Math.random() - 0.5) * 16);
           const nextLatency = Math.max(20, service.metrics.latencyMs + latencyDelta);
           const nextHistory = [...service.metrics.latencyHistory.slice(1), nextLatency];
 
-          const usageRatio = nextCost / service.metrics.budgetCap;
+          const usageRatio =
+            service.metrics.budgetCap > 0 ? nextCost / service.metrics.budgetCap : 0;
           const nextStatus: 'healthy' | 'warning' | 'critical' =
             usageRatio >= 0.95 ? 'critical' : usageRatio >= 0.8 ? 'warning' : 'healthy';
 
