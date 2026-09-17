@@ -1,11 +1,26 @@
 'use client';
 
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Html, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { Settings, Bell, X, GripHorizontal } from 'lucide-react';
+import { Settings, Bell, X, GripHorizontal, Activity, Zap, DollarSign, TrendingUp } from 'lucide-react';
+
+export interface TelemetryMetrics {
+  status: 'healthy' | 'warning' | 'critical';
+  tokens24h: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  burnRate: number;
+  costMonth: number;
+  budgetCap: number;
+  latencyMs: number;
+  latencyHistory: number[];
+  uptimePercent: number;
+}
 
 export interface ServiceNode {
   id: string;
@@ -18,16 +33,17 @@ export interface ServiceNode {
   tilt: [number, number, number];
   speed: number;
   size: number;
+  metrics: TelemetryMetrics;
 }
 
 interface OpenCard {
-  node: ServiceNode;
+  nodeId: string;
   x: number;
   y: number;
   zIndex: number;
 }
 
-const SERVICES: ServiceNode[] = [
+const INITIAL_SERVICES: ServiceNode[] = [
   {
     id: 'openai',
     name: 'OpenAI API',
@@ -38,7 +54,21 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 2.6,
     tilt: [0.15, -0.2, 0.1],
     speed: 0.45,
-    size: 0.65
+    size: 0.65,
+    metrics: {
+      status: 'healthy',
+      tokens24h: {
+        prompt: 1420500,
+        completion: 389200,
+        total: 1809700
+      },
+      burnRate: 142.5,
+      costMonth: 342.8,
+      budgetCap: 400.0,
+      latencyMs: 320,
+      latencyHistory: [310, 340, 290, 420, 315, 330, 295, 305, 360, 320],
+      uptimePercent: 99.98
+    }
   },
   {
     id: 'gemini',
@@ -50,7 +80,21 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 3.4,
     tilt: [-0.12, -0.3, 0.18],
     speed: 0.35,
-    size: 0.72
+    size: 0.72,
+    metrics: {
+      status: 'healthy',
+      tokens24h: {
+        prompt: 2840000,
+        completion: 820000,
+        total: 3660000
+      },
+      burnRate: 268.0,
+      costMonth: 184.2,
+      budgetCap: 250.0,
+      latencyMs: 245,
+      latencyHistory: [260, 250, 240, 270, 230, 245, 238, 255, 240, 245],
+      uptimePercent: 99.99
+    }
   },
   {
     id: 'vercel',
@@ -62,7 +106,21 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 4.2,
     tilt: [0.22, 0.15, -0.12],
     speed: 0.28,
-    size: 0.6
+    size: 0.6,
+    metrics: {
+      status: 'warning',
+      tokens24h: {
+        prompt: 620000,
+        completion: 140000,
+        total: 760000
+      },
+      burnRate: 48.2,
+      costMonth: 82.5,
+      budgetCap: 90.0,
+      latencyMs: 85,
+      latencyHistory: [78, 82, 85, 110, 142, 95, 88, 84, 89, 85],
+      uptimePercent: 99.85
+    }
   },
   {
     id: 'github',
@@ -74,7 +132,21 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 3.0,
     tilt: [-0.18, 0.35, -0.05],
     speed: 0.5,
-    size: 0.68
+    size: 0.68,
+    metrics: {
+      status: 'healthy',
+      tokens24h: {
+        prompt: 980000,
+        completion: 410000,
+        total: 1390000
+      },
+      burnRate: 112.4,
+      costMonth: 38.0,
+      budgetCap: 50.0,
+      latencyMs: 410,
+      latencyHistory: [390, 420, 405, 430, 395, 415, 440, 400, 395, 410],
+      uptimePercent: 99.94
+    }
   }
 ];
 
@@ -118,15 +190,16 @@ function useGlowTexture(colorHex: string) {
     canvas.width = 128;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0, colorHex);
-      grad.addColorStop(0.35, colorHex + '99');
-      grad.addColorStop(0.7, colorHex + '33');
-      grad.addColorStop(1, 'transparent');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 128, 128);
-    }
+    if (!ctx) return null;
+
+    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, colorHex);
+    gradient.addColorStop(0.3, colorHex);
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 128, 128);
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return texture;
@@ -140,27 +213,28 @@ function useCoreGradientTexture() {
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const grad = ctx.createLinearGradient(0, 0, 0, 256);
-      grad.addColorStop(0, '#38bdf8');
-      grad.addColorStop(0.5, '#818cf8');
-      grad.addColorStop(1, '#c026d3');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 256, 256);
-    }
+    if (!ctx) return null;
+
+    const gradient = ctx.createLinearGradient(0, 0, 256, 256);
+    gradient.addColorStop(0, '#38bdf8');
+    gradient.addColorStop(0.5, '#818cf8');
+    gradient.addColorStop(1, '#c084fc');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 256);
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return texture;
   }, []);
 }
 
-// 3D Volumetriskt Stjärnfall (syns alltid oavsett kamerarotation)
 function ShootingStar() {
   const groupRef = useRef<THREE.Group>(null!);
   const [active, setActive] = useState(false);
   const progressRef = useRef(1);
   const timerRef = useRef(0);
-  const nextIntervalRef = useRef(4.0 + Math.random() * 2.0); // 4 till 6 sekunder
+  const nextIntervalRef = useRef(4.0 + Math.random() * 2.0);
   const startPos = useRef(new THREE.Vector3());
   const endPos = useRef(new THREE.Vector3());
 
@@ -171,7 +245,6 @@ function ShootingStar() {
         timerRef.current = 0;
         nextIntervalRef.current = 4.0 + Math.random() * 2.0;
 
-        // Skjut snett genom synfältets övre del
         const x = 12 + Math.random() * 6;
         const y = 8 + Math.random() * 4;
         const z = -4 - Math.random() * 6;
@@ -200,7 +273,6 @@ function ShootingStar() {
 
   return (
     <group ref={groupRef} rotation={[0, 0, 0.52]}>
-      {/* Ljusande meteorit-svans (3D-cylinder så den syns i alla vinklar) */}
       <mesh position={[-2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.02, 0.08, 5, 12]} />
         <meshBasicMaterial
@@ -212,7 +284,6 @@ function ShootingStar() {
         />
       </mesh>
 
-      {/* Skarp vit kärna */}
       <mesh position={[0, 0, 0]}>
         <sphereGeometry args={[0.12, 16, 16]} />
         <meshBasicMaterial
@@ -230,95 +301,140 @@ function ShootingStar() {
 function CentralVibeBubble() {
   const meshRef = useRef<THREE.Mesh>(null!);
   const glowTex = useGlowTexture('#38bdf8');
-  const coreGrad = useCoreGradientTexture();
+  const gradientTex = useCoreGradientTexture();
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (meshRef.current) {
       meshRef.current.rotation.y += delta * 0.15;
+      meshRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.4) * 0.08;
     }
   });
 
   return (
     <group position={[0, 0, 0]}>
       {glowTex && (
-        <sprite scale={[6.2, 6.2, 1]}>
+        <sprite scale={[5.8, 5.8, 1]}>
           <spriteMaterial
             map={glowTex}
             transparent
-            opacity={0.4}
+            opacity={0.32}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
         </sprite>
       )}
 
-      <pointLight color="#38bdf8" intensity={2.8} distance={8} />
+      <Float speed={1.8} rotationIntensity={0.2} floatIntensity={0.4}>
+        <mesh ref={meshRef}>
+          <sphereGeometry args={[1.45, 64, 64]} />
+          <meshPhysicalMaterial
+            roughness={0.12}
+            transmission={0.88}
+            thickness={1.6}
+            ior={1.48}
+            reflectivity={0.9}
+            clearcoat={1.0}
+            clearcoatRoughness={0.1}
+            map={gradientTex || undefined}
+            color="#ffffff"
+            emissive="#38bdf8"
+            emissiveIntensity={0.25}
+          />
+        </mesh>
+      </Float>
 
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[2.0, 64, 64]} />
-        <meshPhysicalMaterial
-          map={coreGrad || undefined}
-          roughness={0.25}
-          metalness={0.08}
-          clearcoat={1.0}
-          clearcoatRoughness={0.05}
-          emissive="#6366f1"
-          emissiveIntensity={0.45}
-        />
-      </mesh>
+      <Html center className="pointer-events-none">
+        <div className="flex flex-col items-center justify-center text-center">
+          <span className="text-[11px] font-mono tracking-[0.3em] uppercase text-cyan-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.9)]">
+            SYSTEM CORE
+          </span>
+          <span className="text-xl font-bold tracking-wider text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.9)]">
+            VIBETRACKER
+          </span>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+function OrbitRing({
+  radiusX,
+  radiusZ,
+  tilt,
+  color
+}: {
+  radiusX: number;
+  radiusZ: number;
+  tilt: [number, number, number];
+  color: string;
+}) {
+  const points = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const segments = 128;
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(theta) * radiusX, 0, Math.sin(theta) * radiusZ));
+    }
+    return pts;
+  }, [radiusX, radiusZ]);
+
+  const geometry = useMemo(() => new THREE.BufferGeometry().setFromPoints(points), [points]);
+
+  return (
+    <group rotation={tilt}>
+      {/* @ts-expect-error Three line primitive */}
+      <line geometry={geometry}>
+        <lineBasicMaterial color={color} transparent opacity={0.28} />
+      </line>
     </group>
   );
 }
 
 function ServiceGlassOrb({
   node,
-  isSelected,
   onSelect
 }: {
   node: ServiceNode;
-  isSelected: boolean;
   onSelect: (node: ServiceNode) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null!);
+  const meshRef = useRef<THREE.Mesh>(null!);
   const [hovered, setHovered] = useState(false);
-  const angleRef = useRef<number>(Math.random() * Math.PI * 2);
   const glowTex = useGlowTexture(node.glowColor);
 
-  useFrame((_, delta) => {
-    angleRef.current += node.speed * delta * 0.4;
-    const x = Math.cos(angleRef.current) * node.orbitRadiusX;
-    const z = Math.sin(angleRef.current) * node.orbitRadiusZ;
+  useFrame((state) => {
+    const t = state.clock.elapsedTime * node.speed;
+    const x = Math.cos(t) * node.orbitRadiusX;
+    const z = Math.sin(t) * node.orbitRadiusZ;
+
+    const pos = new THREE.Vector3(x, 0, z);
+    const euler = new THREE.Euler(...node.tilt);
+    pos.applyEuler(euler);
 
     if (groupRef.current) {
-      groupRef.current.position.set(x, 0, z);
-      const targetScale = hovered || isSelected ? 1.25 : 1.0;
-      groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
+      groupRef.current.position.copy(pos);
+    }
+    if (meshRef.current) {
+      meshRef.current.rotation.y += 0.01;
     }
   });
 
-  const orbitGeometry = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    const segments = 120;
-    for (let i = 0; i <= segments; i++) {
-      const theta = (i / segments) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(theta) * node.orbitRadiusX, 0, Math.sin(theta) * node.orbitRadiusZ));
-    }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [node.orbitRadiusX, node.orbitRadiusZ]);
-
   return (
-    <group rotation={node.tilt}>
-      {/* @ts-expect-error Three line */}
-      <line geometry={orbitGeometry}>
-        <lineBasicMaterial
-          color={node.glowColor}
-          transparent
-          opacity={isSelected || hovered ? 0.75 : 0.35}
-        />
-      </line>
+    <group ref={groupRef}>
+      {glowTex && (
+        <sprite scale={[node.size * 4.2, node.size * 4.2, 1]}>
+          <spriteMaterial
+            map={glowTex}
+            transparent
+            opacity={hovered ? 0.65 : 0.35}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </sprite>
+      )}
 
-      <group
-        ref={groupRef}
+      <mesh
+        ref={meshRef}
         onPointerDown={(e) => {
           e.stopPropagation();
           onSelect(node);
@@ -333,47 +449,41 @@ function ServiceGlassOrb({
           document.body.style.cursor = 'auto';
         }}
       >
-        {glowTex && (
-          <sprite scale={[node.size * 3.4, node.size * 3.4, 1]}>
-            <spriteMaterial
-              map={glowTex}
-              transparent
-              opacity={hovered || isSelected ? 0.75 : 0.45}
-              blending={THREE.AdditiveBlending}
-              depthWrite={false}
-            />
-          </sprite>
-        )}
+        <sphereGeometry args={[node.size, 48, 48]} />
+        <meshPhysicalMaterial
+          roughness={0.15}
+          transmission={0.85}
+          thickness={1.4}
+          ior={1.45}
+          reflectivity={0.9}
+          clearcoat={1.0}
+          clearcoatRoughness={0.1}
+          color={node.color}
+          emissive={node.glowColor}
+          emissiveIntensity={hovered ? 0.55 : 0.25}
+        />
+      </mesh>
 
-        <mesh>
-          <sphereGeometry args={[node.size, 48, 48]} />
-          <meshPhysicalMaterial
-            color={node.color}
-            emissive={node.glowColor}
-            emissiveIntensity={hovered || isSelected ? 0.65 : 0.4}
-            roughness={0.22}
-            metalness={0.08}
-            clearcoat={1.0}
-            clearcoatRoughness={0.06}
-          />
-        </mesh>
-
-        <Html center className="pointer-events-none select-none">
-          <div className="flex items-center justify-center p-2 rounded-full">
-            <BrandLogo id={node.id} />
-          </div>
-        </Html>
-      </group>
+      <Html center className="pointer-events-none">
+        <div className="flex flex-col items-center justify-center transition-transform duration-200" style={{ transform: hovered ? 'scale(1.1)' : 'scale(1)' }}>
+          <BrandLogo id={node.id} />
+          <span className="mt-2 text-[10px] font-mono tracking-widest uppercase text-slate-300 drop-shadow-[0_0_6px_rgba(0,0,0,0.9)] bg-[#07090e]/75 px-2 py-0.5 rounded border border-white/10">
+            {node.provider}
+          </span>
+        </div>
+      </Html>
     </group>
   );
 }
 
 function DraggableCard({
+  node,
   card,
   onClose,
   onBringToFront,
   onUpdatePosition
 }: {
+  node: ServiceNode;
   card: OpenCard;
   onClose: () => void;
   onBringToFront: () => void;
@@ -413,6 +523,20 @@ function DraggableCard({
     }
   };
 
+  const budgetUsagePercent = Math.min(
+    100,
+    Math.round((node.metrics.costMonth / node.metrics.budgetCap) * 100)
+  );
+
+  const budgetBarColor =
+    budgetUsagePercent >= 95
+      ? 'bg-rose-500'
+      : budgetUsagePercent >= 80
+      ? 'bg-amber-400'
+      : 'bg-emerald-400';
+
+  const maxLatency = Math.max(...node.metrics.latencyHistory, 1);
+
   return (
     <div
       onPointerDown={onBringToFront}
@@ -421,7 +545,7 @@ function DraggableCard({
         top: `${card.y}px`,
         zIndex: card.zIndex
       }}
-      className={`absolute w-[380px] h-[240px] rounded-2xl border border-white/15 bg-[#0b0f17]/85 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] select-none overflow-hidden transition-shadow duration-200 ${
+      className={`absolute w-[400px] h-[340px] rounded-2xl border border-white/15 bg-[#0b0f17]/85 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] select-none overflow-hidden transition-shadow duration-200 flex flex-col ${
         isDragging ? 'shadow-[0_30px_70px_rgba(0,0,0,0.95)] ring-1 ring-white/20' : ''
       }`}
     >
@@ -435,7 +559,7 @@ function DraggableCard({
       <div
         className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-32 rounded-full pointer-events-none opacity-45 filter blur-2xl transition-all duration-500"
         style={{
-          backgroundColor: card.node.glowColor
+          backgroundColor: node.glowColor
         }}
       />
 
@@ -449,12 +573,13 @@ function DraggableCard({
           <GripHorizontal className="w-3.5 h-3.5 text-slate-500" />
           <span
             className="inline-block w-2 h-2 rounded-full"
-            style={{ backgroundColor: card.node.glowColor }}
+            style={{ backgroundColor: node.glowColor }}
           />
-          <span>{card.node.name}</span>
+          <span>{node.name}</span>
         </div>
 
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -465,33 +590,167 @@ function DraggableCard({
         </button>
       </div>
 
-      <div className="relative z-10 w-full h-[180px] p-4 flex items-center justify-center text-slate-500 text-xs tracking-widest uppercase">
-        {/* Tom och ren */}
+      <div className="relative z-10 w-full flex-1 p-4 flex flex-col justify-between text-xs">
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
+            <div className="flex items-center justify-between text-slate-400 mb-1">
+              <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+                <Zap className="w-3 h-3 text-amber-400" /> Burn-rate
+              </span>
+              <span className="text-[10px] text-slate-500">live</span>
+            </div>
+            <div className="text-base font-bold text-white font-mono">
+              {node.metrics.burnRate.toFixed(1)} <span className="text-[11px] font-normal text-slate-400">tok/s</span>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
+            <div className="flex items-center justify-between text-slate-400 mb-1">
+              <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+                <Activity className="w-3 h-3 text-cyan-400" /> TTFT Latens
+              </span>
+              <span
+                className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                  node.metrics.status === 'healthy'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                    : node.metrics.status === 'warning'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-500/30'
+                    : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                }`}
+              >
+                {node.metrics.status}
+              </span>
+            </div>
+            <div className="text-base font-bold text-white font-mono">
+              {node.metrics.latencyMs} <span className="text-[11px] font-normal text-slate-400">ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+              <DollarSign className="w-3 h-3 text-emerald-400" /> Månadskostnad
+            </span>
+            <span className="font-mono text-[11px] text-slate-300">
+              ${node.metrics.costMonth.toFixed(2)} /${node.metrics.budgetCap.toFixed(1)}
+            </span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${budgetBarColor}`}
+              style={{ width: `${budgetUsagePercent}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center mt-1 text-[9px] text-slate-500 font-mono">
+            <span>Förbrukat: {budgetUsagePercent}%</span>
+            {budgetUsagePercent >= 80 && (
+              <span className="text-amber-400 font-semibold tracking-wider uppercase">Tröskelvarning</span>
+            )}
+          </div>
+        </div>
+
+        <div className="p-2.5 rounded-xl border border-white/10 bg-white/[0.02]">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider">
+              <TrendingUp className="w-3 h-3 text-indigo-400" /> Latenshistorik (10 anrop)
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">Uptime: {node.metrics.uptimePercent}%</span>
+          </div>
+          <div className="h-10 flex items-end justify-between gap-1 pt-1">
+            {node.metrics.latencyHistory.map((val, idx) => {
+              const heightPercent = Math.max(15, Math.round((val / maxLatency) * 100));
+              return (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-1 group">
+                  <div
+                    className="w-full rounded-sm bg-indigo-400/50 group-hover:bg-cyan-400 transition-colors"
+                    style={{ height: `${heightPercent}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 px-1 border-t border-white/5 pt-2">
+          <span>24H VOLYM: {(node.metrics.tokens24h.total / 1000000).toFixed(2)}M TOKENS</span>
+          <span>PROMPT: {(node.metrics.tokens24h.prompt / 1000).toFixed(0)}k | COMPL: {(node.metrics.tokens24h.completion / 1000).toFixed(0)}k</span>
+        </div>
       </div>
     </div>
   );
 }
 
 export default function VibeTrackerDashboard() {
+  const [services, setServices] = useState<ServiceNode[]>(INITIAL_SERVICES);
   const [openCards, setOpenCards] = useState<OpenCard[]>([]);
   const [topZ, setTopZ] = useState(40);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setServices((prev) =>
+        prev.map((service) => {
+          const burnDelta = (Math.random() - 0.48) * 4;
+          const currentBurnRate = Math.max(15, service.metrics.burnRate + burnDelta);
+
+          const newTokens = Math.round(currentBurnRate);
+          const promptPortion = Math.round(newTokens * 0.72);
+          const completionPortion = newTokens - promptPortion;
+
+          const costAddition = (newTokens / 1000000) * (service.id === 'openai' ? 3.0 : service.id === 'gemini' ? 1.5 : 1.0);
+          const nextCost = service.metrics.costMonth + costAddition;
+
+          const latencyDelta = Math.round((Math.random() - 0.5) * 16);
+          const nextLatency = Math.max(20, service.metrics.latencyMs + latencyDelta);
+          const nextHistory = [...service.metrics.latencyHistory.slice(1), nextLatency];
+
+          const usageRatio = nextCost / service.metrics.budgetCap;
+          const nextStatus: 'healthy' | 'warning' | 'critical' =
+            usageRatio >= 0.95 ? 'critical' : usageRatio >= 0.8 ? 'warning' : 'healthy';
+
+          return {
+            ...service,
+            metrics: {
+              ...service.metrics,
+              burnRate: currentBurnRate,
+              costMonth: nextCost,
+              status: nextStatus,
+              latencyMs: nextLatency,
+              latencyHistory: nextHistory,
+              tokens24h: {
+                prompt: service.metrics.tokens24h.prompt + promptPortion,
+                completion: service.metrics.tokens24h.completion + completionPortion,
+                total: service.metrics.tokens24h.total + newTokens
+              }
+            }
+          };
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const alertCount = useMemo(() => {
+    return services.filter((s) => s.metrics.status !== 'healthy').length;
+  }, [services]);
+
   const handleSelectNode = (node: ServiceNode) => {
     setOpenCards((prev) => {
-      const existing = prev.find((c) => c.node.id === node.id);
+      const existing = prev.find((c) => c.nodeId === node.id);
       if (existing) {
         const nextZ = topZ + 1;
         setTopZ(nextZ);
-        return prev.map((c) => (c.node.id === node.id ? { ...c, zIndex: nextZ } : c));
+        return prev.map((c) => (c.nodeId === node.id ? { ...c, zIndex: nextZ } : c));
       }
 
       const offset = prev.length * 30;
-      const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 190 + offset) : 100;
+      const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 200 + offset) : 100;
       const initialY = 120 + offset;
       const nextZ = topZ + 1;
       setTopZ(nextZ);
 
-      return [...prev, { node, x: initialX, y: initialY, zIndex: nextZ }];
+      return [...prev, { nodeId: node.id, x: initialX, y: initialY, zIndex: nextZ }];
     });
   };
 
@@ -499,23 +758,22 @@ export default function VibeTrackerDashboard() {
     const nextZ = topZ + 1;
     setTopZ(nextZ);
     setOpenCards((prev) =>
-      prev.map((c) => (c.node.id === nodeId ? { ...c, zIndex: nextZ } : c))
+      prev.map((c) => (c.nodeId === nodeId ? { ...c, zIndex: nextZ } : c))
     );
   };
 
   const handleUpdatePosition = (nodeId: string, x: number, y: number) => {
     setOpenCards((prev) =>
-      prev.map((c) => (c.node.id === nodeId ? { ...c, x, y } : c))
+      prev.map((c) => (c.nodeId === nodeId ? { ...c, x, y } : c))
     );
   };
 
   const handleCloseCard = (nodeId: string) => {
-    setOpenCards((prev) => prev.filter((c) => c.node.id !== nodeId));
+    setOpenCards((prev) => prev.filter((c) => c.nodeId !== nodeId));
   };
 
   return (
     <div className="relative w-full h-screen bg-[#07090e] overflow-hidden select-none font-sans text-white">
-      {/* Bakgrundsglöd runt mitten */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none opacity-20"
         style={{
@@ -523,7 +781,6 @@ export default function VibeTrackerDashboard() {
         }}
       />
 
-      {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-10 py-5 bg-transparent">
         <div className="flex items-center gap-2">
           <span className="font-bold text-2xl tracking-tight text-white">VibeTracker</span>
@@ -538,9 +795,17 @@ export default function VibeTrackerDashboard() {
         </nav>
 
         <div className="flex items-center gap-5 text-sm">
-          <button className="text-slate-400 hover:text-white transition">
-            <Bell className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            <button className="text-slate-400 hover:text-white transition p-1">
+              <Bell className="w-4 h-4" />
+            </button>
+            {alertCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-black ring-2 ring-[#07090e] animate-pulse">
+                {alertCount}
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-purple-600 p-[1px]">
               <div className="w-full h-full rounded-full bg-[#13151f] flex items-center justify-center font-semibold text-xs text-white">
@@ -548,25 +813,19 @@ export default function VibeTrackerDashboard() {
               </div>
             </div>
           </div>
+          <button className="text-slate-400 hover:text-white transition">
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
-      {/* Flikar */}
-      <div className="absolute top-16 left-0 right-0 z-10 flex justify-center gap-8 text-xs font-medium text-slate-400">
-        <span className="text-slate-200">Overview</span>
-        <span>Services</span>
-        <span>Usage</span>
-        <span>Budgets</span>
-      </div>
-
-      {/* 3D Canvas */}
       <Canvas
-        camera={{ position: [0, 4.5, 12], fov: 38 }}
-        className="w-full h-full"
+        camera={{ position: [0, 8, 17], fov: 45 }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         <color attach="background" args={['#07090e']} />
 
-        {/* Lugna stjärnor */}
         <Stars
           radius={65}
           depth={50}
@@ -577,104 +836,64 @@ export default function VibeTrackerDashboard() {
           speed={0}
         />
 
-        {/* 3D Stjärnfall med garanterad synlighet */}
         <ShootingStar />
 
         <ambientLight intensity={0.4} />
         <directionalLight position={[10, 14, 10]} intensity={2.6} />
 
-        <Float speed={1.2} rotationIntensity={0.04} floatIntensity={0.1}>
-          <CentralVibeBubble />
-          {SERVICES.map((node) => (
-            <ServiceGlassOrb
-              key={node.id}
-              node={node}
-              isSelected={openCards.some((c) => c.node.id === node.id)}
-              onSelect={handleSelectNode}
-            />
-          ))}
-        </Float>
+        <CentralVibeBubble />
+
+        {services.map((node) => (
+          <OrbitRing
+            key={`orbit-${node.id}`}
+            radiusX={node.orbitRadiusX}
+            radiusZ={node.orbitRadiusZ}
+            tilt={node.tilt}
+            color={node.color}
+          />
+        ))}
+
+        {services.map((node) => (
+          <ServiceGlassOrb
+            key={node.id}
+            node={node}
+            onSelect={handleSelectNode}
+          />
+        ))}
 
         <EffectComposer>
           <Bloom
             luminanceThreshold={0.2}
             luminanceSmoothing={0.9}
+            height={300}
             intensity={1.2}
           />
         </EffectComposer>
 
         <OrbitControls
           enablePan={false}
-          minDistance={6}
-          maxDistance={22}
-          maxPolarAngle={Math.PI / 2 - 0.05}
+          minDistance={8}
+          maxDistance={32}
+          maxPolarAngle={Math.PI / 2 + 0.15}
+          minPolarAngle={0.2}
         />
       </Canvas>
 
-      {/* Draggable Cards */}
-      {openCards.map((card) => (
-        <DraggableCard
-          key={card.node.id}
-          card={card}
-          onClose={() => handleCloseCard(card.node.id)}
-          onBringToFront={() => handleBringToFront(card.node.id)}
-          onUpdatePosition={(x, y) => handleUpdatePosition(card.node.id, x, y)}
-        />
-      ))}
+      {openCards.map((card) => {
+        const node = services.find((s) => s.id === card.nodeId);
+        if (!node) return null;
 
-      {/* Text under kärnan */}
-      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-10 text-center">
-        <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-400 font-semibold mb-1">
-          Credits Tracking
-        </div>
-        <div className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-teal-300 via-cyan-400 to-purple-400 bg-clip-text text-transparent">
-          VibeTracker
-        </div>
-        <div className="text-xs uppercase tracking-[0.18em] text-slate-400 font-medium mt-0.5">
-          Usage & Finance Dashboard
-        </div>
-      </div>
-
-      {/* Telemetri nere till vänster */}
-      <div className="absolute bottom-8 left-10 z-20 w-64 rounded-xl border border-white/10 bg-[#0e111a]/75 p-4 backdrop-blur-xl shadow-2xl text-xs">
-        <div className="text-[10px] font-semibold tracking-wider text-teal-400 uppercase mb-2">
-          Usage Telemetry
-        </div>
-        <div className="space-y-1.5 text-slate-300">
-          <div className="flex justify-between">
-            <span className="text-slate-400">API events</span>
-            <span className="font-medium text-white font-mono">1200/5hs</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">API cash used</span>
-            <span className="font-medium text-white font-mono">2999 mts</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Recent status</span>
-            <span className="font-medium text-emerald-400 font-mono">LIVE API</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Budget nere till höger */}
-      <div className="absolute bottom-8 right-12 z-20 flex flex-col gap-3 w-64">
-        <div className="rounded-xl border border-white/10 bg-[#0e111a]/75 p-3.5 backdrop-blur-xl shadow-xl">
-          <div className="flex justify-between text-xs mb-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-slate-400">OpenAI Budget</span>
-            <span className="font-bold text-white text-sm">80%</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full rounded-full bg-gradient-to-r from-teal-400 to-emerald-400 w-[80%]" />
-          </div>
-        </div>
-      </div>
-
-      <button
-        onClick={() => alert("Inställningar")}
-        className="absolute bottom-5 right-4 z-20 text-slate-500 hover:text-white transition"
-      >
-        <Settings className="w-4 h-4" />
-      </button>
+        return (
+          <DraggableCard
+            key={card.nodeId}
+            node={node}
+            card={card}
+            onClose={() => handleCloseCard(card.nodeId)}
+            onBringToFront={() => handleBringToFront(card.nodeId)}
+            onUpdatePosition={(x, y) => handleUpdatePosition(card.nodeId, x, y)}
+          />
+        );
+      })}
     </div>
   );
 }
