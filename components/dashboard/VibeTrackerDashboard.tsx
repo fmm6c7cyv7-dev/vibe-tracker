@@ -2,51 +2,15 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, Float } from '@react-three/drei';
+import { OrbitControls, Stars, Float, Html } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { Settings, Bell, X } from 'lucide-react';
-
-const LOGO_SVGS = {
-  openai: `data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill="rgba(16,185,129,0.15)"/>
-      <path d="M50 20c-1.5 0-3 .3-4.3.9l-11 6.3c-2.4 1.4-4 3.9-4.3 6.6l-.3 12.8c0 1.5.4 3 1.2 4.3l6.5 11.2c1.4 2.4 3.9 4 6.6 4.3l12.8.3c1.5 0 3-.4 4.3-1.2l11.2-6.5c2.4-1.4 4-3.9 4.3-6.6l.3-12.8c0-1.5-.4-3-1.2-4.3L70.9 33.7c-1.4-2.4-3.9-4-6.6-4.3L51.5 29c-.5-.1-1-.1-1.5-.1z" stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M42 45l8-4.6 8 4.6v9.2l-8 4.6-8-4.6z" stroke="#ffffff" stroke-width="4" fill="rgba(255,255,255,0.2)"/>
-    </svg>
-  `)}`,
-  github: `data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill="rgba(168,85,247,0.15)"/>
-      <path fill-rule="evenodd" clip-rule="evenodd" d="M50 22C34.5 22 22 34.5 22 50c0 12.4 8 23 19.2 26.7 1.4.3 1.9-.6 1.9-1.3v-5.2c-7.8 1.7-9.4-3.3-9.4-3.3-1.3-3.2-3.1-4.1-3.1-4.1-2.5-1.7.2-1.7.2-1.7 2.8.2 4.3 2.9 4.3 2.9 2.5 4.3 6.6 3 8.2 2.3.3-1.8 1-3 1.8-3.7-6.2-.7-12.8-3.1-12.8-13.8 0-3.1 1.1-5.6 2.9-7.5-.3-.7-1.3-3.6.3-7.4 0 0 2.4-.8 7.7 2.9a26.8 26.8 0 0114.1 0c5.4-3.6 7.7-2.9 7.7-2.9 1.6 3.8.6 6.7.3 7.4 1.8 1.9 2.9 4.4 2.9 7.5 0 10.8-6.6 13.1-12.8 13.8 1 1 1.9 2.7 1.9 5.5v8.1c0 .8.5 1.7 1.9 1.4C70 73 78 62.4 78 50c0-15.5-12.5-28-28-28z" fill="#ffffff"/>
-    </svg>
-  `)}`,
-  gemini: `data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill="rgba(56,189,248,0.15)"/>
-      <path d="M50 18 C50 35.5 64.5 50 82 50 C64.5 50 50 64.5 50 82 C50 64.5 35.5 50 18 50 C35.5 50 50 35.5 50 18 Z" fill="url(#sparkleGlow)"/>
-      <defs>
-        <linearGradient id="sparkleGlow" x1="18" y1="18" x2="82" y2="82" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#ffffff"/>
-          <stop offset="0.5" stop-color="#38bdf8"/>
-          <stop offset="1" stop-color="#f43f5e"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  `)}`,
-  vercel: `data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill="rgba(255,255,255,0.1)"/>
-      <polygon points="50,22 80,74 20,74" fill="#ffffff"/>
-    </svg>
-  `)}`
-};
 
 export interface ServiceNode {
   id: string;
   name: string;
   provider: string;
-  logoKey: keyof typeof LOGO_SVGS;
   status: 'LIVE' | 'Okänd' | 'Varning';
   statusDetail: string;
   color: string;
@@ -54,7 +18,6 @@ export interface ServiceNode {
   orbitRadiusX: number;
   orbitRadiusZ: number;
   waveAmplitudeY: number;
-  waveFrequency: number;
   tilt: [number, number, number];
   speed: number;
   size: number;
@@ -69,18 +32,16 @@ const SERVICES: ServiceNode[] = [
     id: 'github',
     name: 'GitHub Copilot',
     provider: 'GITHUB',
-    logoKey: 'github',
     status: 'LIVE',
     statusDetail: 'Live API',
     color: '#a855f7',
     glowColor: '#c084fc',
     orbitRadiusX: 4.8,
-    orbitRadiusZ: 2.6,
-    waveAmplitudeY: 0.25,
-    waveFrequency: 2,
-    tilt: [-0.18, 0.35, -0.08],
-    speed: 0.5,
-    size: 0.6,
+    orbitRadiusZ: 2.7,
+    waveAmplitudeY: 0.2,
+    tilt: [-0.15, 0.35, -0.05],
+    speed: 0.55,
+    size: 0.65,
     budgetUsedPercent: 75,
     burnRatePerHour: 0.65,
     currentCredits: '$187.50',
@@ -90,18 +51,16 @@ const SERVICES: ServiceNode[] = [
     id: 'openai',
     name: 'OpenAI API',
     provider: 'OPENAI',
-    logoKey: 'openai',
     status: 'LIVE',
     statusDetail: 'Live API',
     color: '#10b981',
     glowColor: '#34d399',
-    orbitRadiusX: 6.2,
-    orbitRadiusZ: 3.3,
-    waveAmplitudeY: -0.3,
-    waveFrequency: 3,
-    tilt: [0.22, -0.25, 0.12],
-    speed: 0.38,
-    size: 0.58,
+    orbitRadiusX: 6.3,
+    orbitRadiusZ: 3.4,
+    waveAmplitudeY: -0.25,
+    tilt: [0.2, -0.22, 0.1],
+    speed: 0.42,
+    size: 0.62,
     budgetUsedPercent: 80,
     burnRatePerHour: 2.45,
     currentCredits: '$200.00',
@@ -111,18 +70,16 @@ const SERVICES: ServiceNode[] = [
     id: 'gemini',
     name: 'Google Gemini',
     provider: 'GOOGLE',
-    logoKey: 'gemini',
     status: 'LIVE',
     statusDetail: 'Live API',
     color: '#38bdf8',
     glowColor: '#f43f5e',
-    orbitRadiusX: 7.6,
-    orbitRadiusZ: 4.1,
-    waveAmplitudeY: 0.35,
-    waveFrequency: 2.5,
-    tilt: [-0.14, -0.32, 0.22],
-    speed: 0.3,
-    size: 0.64,
+    orbitRadiusX: 7.7,
+    orbitRadiusZ: 4.2,
+    waveAmplitudeY: 0.3,
+    tilt: [-0.12, -0.3, 0.18],
+    speed: 0.32,
+    size: 0.66,
     budgetUsedPercent: 42,
     burnRatePerHour: 1.15,
     currentCredits: '$84.00',
@@ -132,18 +89,16 @@ const SERVICES: ServiceNode[] = [
     id: 'vercel',
     name: 'Vercel Edge',
     provider: 'VERCEL',
-    logoKey: 'vercel',
     status: 'LIVE',
     statusDetail: 'Live API',
-    color: '#f8fafc',
-    glowColor: '#cbd5e1',
-    orbitRadiusX: 9.0,
-    orbitRadiusZ: 4.8,
-    waveAmplitudeY: -0.2,
-    waveFrequency: 4,
-    tilt: [0.28, 0.18, -0.16],
-    speed: 0.22,
-    size: 0.54,
+    color: '#f1f5f9',
+    glowColor: '#94a3b8',
+    orbitRadiusX: 9.1,
+    orbitRadiusZ: 4.9,
+    waveAmplitudeY: -0.18,
+    tilt: [0.26, 0.15, -0.14],
+    speed: 0.25,
+    size: 0.58,
     budgetUsedPercent: 22,
     burnRatePerHour: 0.30,
     currentCredits: '$22.00',
@@ -151,9 +106,50 @@ const SERVICES: ServiceNode[] = [
   }
 ];
 
+function BrandLogo({ id, color }: { id: string; color: string }) {
+  if (id === 'github') {
+    return (
+      <svg className="w-7 h-7" viewBox="0 0 24 24" fill="white">
+        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+      </svg>
+    );
+  }
+  if (id === 'openai') {
+    return (
+      <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2a4 4 0 0 0-4 4v2" />
+        <path d="M16 10a4 4 0 0 0-4-4H8" />
+        <path d="M12 22a4 4 0 0 0 4-4v-2" />
+        <path d="M8 14a4 4 0 0 0 4 4h4" />
+        <circle cx="12" cy="12" r="2" fill="white" />
+      </svg>
+    );
+  }
+  if (id === 'gemini') {
+    return (
+      <svg className="w-8 h-8" viewBox="0 0 24 24" fill="url(#gemGrad)">
+        <defs>
+          <linearGradient id="gemGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#ffffff" />
+            <stop offset="0.5" stopColor="#38bdf8" />
+            <stop offset="1" stopColor="#f43f5e" />
+          </linearGradient>
+        </defs>
+        <path d="M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="white">
+      <path d="M12 3L22 20H2L12 3Z" />
+    </svg>
+  );
+}
+
+// Den kristallklara glaskärnan med inre levande ljudvåg
 function GlassLiquidityCore() {
   const outerSphereRef = useRef<THREE.Mesh>(null!);
-  const waveLineRef = useRef<THREE.Line>(null!);
+  const wavePointsRef = useRef<THREE.Line>(null!);
   const haloRef = useRef<THREE.Mesh>(null!);
 
   const { basePoints } = useMemo(() => {
@@ -173,18 +169,18 @@ function GlassLiquidityCore() {
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
-    if (outerSphereRef.current) outerSphereRef.current.rotation.y += delta * 0.2;
+    if (outerSphereRef.current) outerSphereRef.current.rotation.y += delta * 0.15;
     if (haloRef.current) {
-      haloRef.current.rotation.z += delta * 0.35;
-      const s = 1 + Math.sin(t * 2) * 0.04;
+      haloRef.current.rotation.z += delta * 0.3;
+      const s = 1 + Math.sin(t * 2.5) * 0.04;
       haloRef.current.scale.set(s, s, s);
     }
-    if (waveLineRef.current) {
-      const pos = waveLineRef.current.geometry.attributes.position;
+    if (wavePointsRef.current) {
+      const pos = wavePointsRef.current.geometry.attributes.position;
       for (let i = 0; i < basePoints.length; i++) {
         const bp = basePoints[i];
-        const y = Math.sin(i * 0.28 + t * 4) * 0.22 + Math.cos(i * 0.5 - t * 2) * 0.12;
-        pos.setXYZ(i, bp.x, y, bp.z);
+        const wave = Math.sin(i * 0.35 + t * 4) * 0.35 + Math.cos(i * 0.6 - t * 2) * 0.15;
+        pos.setXYZ(i, bp.x, wave, bp.z);
       }
       pos.needsUpdate = true;
     }
@@ -192,41 +188,52 @@ function GlassLiquidityCore() {
 
   return (
     <group position={[0, 0, 0]}>
+      {/* Inre glödande gradientkula */}
       <mesh>
-        <sphereGeometry args={[1.3, 48, 48]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#6366f1" emissiveIntensity={0.6} roughness={0.4} />
-      </mesh>
-
-      {/* @ts-expect-error Three line */}
-      <line ref={waveLineRef} geometry={lineGeometry}>
-        <lineBasicMaterial color="#f43f5e" />
-      </line>
-
-      <mesh ref={outerSphereRef}>
-        <sphereGeometry args={[1.65, 64, 64]} />
+        <sphereGeometry args={[1.32, 64, 64]} />
         <meshPhysicalMaterial
-          color="#c4b5fd"
-          transparent
-          opacity={0.35}
-          roughness={0.08}
+          color="#38bdf8"
+          emissive="#6366f1"
+          emissiveIntensity={0.8}
+          roughness={0.2}
           metalness={0.1}
-          transmission={0.88}
-          ior={1.4}
-          thickness={1.5}
-          specularIntensity={2}
+          transmission={0.6}
+          thickness={0.8}
         />
       </mesh>
 
-      <mesh ref={haloRef} rotation={[Math.PI / 3, 0.2, 0]}>
-        <torusGeometry args={[1.75, 0.02, 16, 100]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} />
+      {/* Den inre böljande neon-vågen */}
+      {/* @ts-expect-error Three line JSX */}
+      <line ref={wavePointsRef} geometry={lineGeometry}>
+        <lineBasicMaterial color="#fb7185" linewidth={4} />
+      </line>
+
+      {/* Yttre kristallklart glasskal */}
+      <mesh ref={outerSphereRef}>
+        <sphereGeometry args={[1.65, 64, 64]} />
+        <meshPhysicalMaterial
+          color="#e0e7ff"
+          transparent
+          opacity={0.3}
+          roughness={0.05}
+          metalness={0.1}
+          transmission={0.92}
+          ior={1.45}
+          thickness={1.8}
+          specularIntensity={3}
+        />
+      </mesh>
+
+      {/* Ljusring */}
+      <mesh ref={haloRef} rotation={[Math.PI / 3, 0.25, 0]}>
+        <torusGeometry args={[1.78, 0.025, 16, 120]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
       </mesh>
     </group>
   );
 }
 
-// Dynamisk omloppsbana och ljusspår som följer planeten
-function DynamicOrbitSystem({
+function OrbitSystem({
   node,
   currentAngle,
   isSelected,
@@ -239,14 +246,13 @@ function DynamicOrbitSystem({
 }) {
   const segments = 160;
 
-  // Beräkna omloppsbanans 3D-kurva med variabel höjd (vågrörelse)
   const curvePoints = useMemo(() => {
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
       const theta = (i / segments) * Math.PI * 2;
       const x = Math.cos(theta) * node.orbitRadiusX;
       const z = Math.sin(theta) * node.orbitRadiusZ;
-      const y = Math.sin(theta * node.waveFrequency) * node.waveAmplitudeY;
+      const y = Math.sin(theta * 2) * node.waveAmplitudeY;
       pts.push(new THREE.Vector3(x, y, z));
     }
     return pts;
@@ -256,16 +262,15 @@ function DynamicOrbitSystem({
     return new THREE.BufferGeometry().setFromPoints(curvePoints);
   }, [curvePoints]);
 
-  // Komet-svans / Ljussvans bakom planeten
   const tailGeometry = useMemo(() => {
     const pts: THREE.Vector3[] = [];
-    const trailSegments = 35;
-    const trailSpan = 0.85; // Båglängd i radianer bakom planeten
+    const trailSegments = 40;
+    const trailSpan = 1.1;
     for (let i = 0; i <= trailSegments; i++) {
       const theta = currentAngle - (i / trailSegments) * trailSpan;
       const x = Math.cos(theta) * node.orbitRadiusX;
       const z = Math.sin(theta) * node.orbitRadiusZ;
-      const y = Math.sin(theta * node.waveFrequency) * node.waveAmplitudeY;
+      const y = Math.sin(theta * 2) * node.waveAmplitudeY;
       pts.push(new THREE.Vector3(x, y, z));
     }
     return new THREE.BufferGeometry().setFromPoints(pts);
@@ -273,33 +278,23 @@ function DynamicOrbitSystem({
 
   return (
     <>
-      {/* Huvudsaklig omloppsbana */}
+      {/* Tunn omloppsbana */}
       {/* @ts-expect-error Three line */}
       <line geometry={baseGeometry}>
         <lineBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.6 : 0.22}
+          opacity={isSelected || hovered ? 0.6 : 0.2}
         />
       </line>
 
-      {/* Yttre mjuk glödkontur */}
-      {/* @ts-expect-error Three line */}
-      <line geometry={baseGeometry} scale={[1.008, 1.008, 1.008]}>
-        <lineBasicMaterial
-          color={node.color}
-          transparent
-          opacity={isSelected ? 0.35 : 0.08}
-        />
-      </line>
-
-      {/* Komet-svans bakom planeten */}
+      {/* Ljussvans bakom planeten */}
       {/* @ts-expect-error Three line */}
       <line geometry={tailGeometry}>
         <lineBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.95 : 0.7}
+          opacity={isSelected || hovered ? 1 : 0.8}
         />
       </line>
     </>
@@ -320,27 +315,17 @@ function PlanetSphere({
   const angleRef = useRef<number>(Math.random() * Math.PI * 2);
   const [currentAngle, setCurrentAngle] = useState(angleRef.current);
 
-  const texture = useMemo(() => {
-    const img = new Image();
-    img.src = LOGO_SVGS[node.logoKey];
-    const tex = new THREE.Texture(img);
-    img.onload = () => {
-      tex.needsUpdate = true;
-    };
-    return tex;
-  }, [node.logoKey]);
-
   useFrame((_, delta) => {
     angleRef.current += node.speed * delta * 0.45;
     setCurrentAngle(angleRef.current);
 
     const x = Math.cos(angleRef.current) * node.orbitRadiusX;
     const z = Math.sin(angleRef.current) * node.orbitRadiusZ;
-    const y = Math.sin(angleRef.current * node.waveFrequency) * node.waveAmplitudeY;
+    const y = Math.sin(angleRef.current * 2) * node.waveAmplitudeY;
 
     if (planetGroupRef.current) {
       planetGroupRef.current.position.set(x, y, z);
-      const targetScale = hovered || isSelected ? 1.25 : 1.0;
+      const targetScale = hovered || isSelected ? 1.3 : 1.0;
       planetGroupRef.current.scale.lerp(
         new THREE.Vector3(targetScale, targetScale, targetScale),
         0.1
@@ -350,7 +335,7 @@ function PlanetSphere({
 
   return (
     <group rotation={node.tilt}>
-      <DynamicOrbitSystem
+      <OrbitSystem
         node={node}
         currentAngle={currentAngle}
         isSelected={isSelected}
@@ -373,45 +358,54 @@ function PlanetSphere({
           document.body.style.cursor = 'auto';
         }}
       >
-        {/* Yttre glaskupa med matchande sfärfärg */}
+        {/* Inre lysande neonkärna */}
+        <mesh>
+          <sphereGeometry args={[node.size * 0.85, 32, 32]} />
+          <meshStandardMaterial
+            color={node.color}
+            emissive={node.glowColor}
+            emissiveIntensity={hovered || isSelected ? 1.6 : 1.1}
+            roughness={0.2}
+          />
+        </mesh>
+
+        {/* Yttre genomskinligt glaslager */}
         <mesh>
           <sphereGeometry args={[node.size, 48, 48]} />
           <meshPhysicalMaterial
-            color={node.color}
+            color="#ffffff"
             transparent
-            opacity={0.42}
-            roughness={0.08}
-            metalness={0.15}
-            transmission={0.85}
-            ior={1.45}
-            thickness={1.1}
+            opacity={0.35}
+            roughness={0.05}
+            transmission={0.9}
+            ior={1.4}
+            thickness={1.2}
             specularIntensity={2.5}
-            emissive={node.glowColor}
-            emissiveIntensity={hovered || isSelected ? 0.7 : 0.25}
           />
         </mesh>
 
-        {/* Ljusring som binder samman planeten med omloppsbanan */}
+        {/* Ljusring runt ekvatorn */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[node.size * 1.05, node.size * 1.2, 32]} />
+          <ringGeometry args={[node.size * 1.08, node.size * 1.25, 32]} />
           <meshBasicMaterial
             color={node.glowColor}
             transparent
-            opacity={hovered || isSelected ? 0.95 : 0.45}
+            opacity={hovered || isSelected ? 0.95 : 0.55}
             side={THREE.DoubleSide}
           />
         </mesh>
 
-        {/* Logotypen i mitten */}
-        <mesh>
-          <planeGeometry args={[node.size * 1.05, node.size * 1.05]} />
-          <meshBasicMaterial
-            map={texture}
-            transparent
-            alphaTest={0.05}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
+        {/* Vektorlogotyp som Html-komponent (alltid skarp & centrerad) */}
+        <Html center transform distanceFactor={12} className="pointer-events-none select-none">
+          <div 
+            className="flex items-center justify-center p-2 rounded-full drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]"
+            style={{
+              filter: `drop-shadow(0 0 14px ${node.glowColor})`
+            }}
+          >
+            <BrandLogo id={node.id} color={node.color} />
+          </div>
+        </Html>
       </group>
     </group>
   );
@@ -462,7 +456,7 @@ export default function VibeTrackerDashboard() {
         </div>
       </header>
 
-      {/* Underrubrik */}
+      {/* Underrubriker */}
       <div className="absolute top-16 left-0 right-0 z-10 flex justify-center gap-8 text-xs font-medium text-slate-400">
         <span className="text-slate-200">Overview</span>
         <span>Services</span>
@@ -478,10 +472,10 @@ export default function VibeTrackerDashboard() {
         <color attach="background" args={['#07080d']} />
         <Stars radius={70} depth={40} count={1800} factor={2.5} saturation={0} fade speed={0.8} />
 
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[15, 20, 10]} intensity={1.8} />
-        <pointLight position={[-12, -8, -10]} intensity={0.8} color="#8b5cf6" />
-        <pointLight position={[12, -8, 10]} intensity={0.6} color="#38bdf8" />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[15, 20, 10]} intensity={2.0} />
+        <pointLight position={[-12, -8, -10]} intensity={1.0} color="#8b5cf6" />
+        <pointLight position={[12, -8, 10]} intensity={0.8} color="#38bdf8" />
 
         <Float speed={1} rotationIntensity={0.06} floatIntensity={0.12}>
           <GlassLiquidityCore />
@@ -511,7 +505,7 @@ export default function VibeTrackerDashboard() {
         />
       </Canvas>
 
-      {/* Flytande Popover: Credits Tracking */}
+      {/* Popover: Credits Tracking */}
       {selectedNode && (
         <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 w-80 rounded-2xl border border-white/15 bg-[#0e111a]/75 p-4 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-start justify-between border-b border-white/10 pb-2 mb-3">
@@ -614,7 +608,6 @@ export default function VibeTrackerDashboard() {
         </div>
       </div>
 
-      {/* Inställningar */}
       <button
         onClick={() => alert("Inställningar")}
         className="absolute bottom-5 right-4 z-20 text-slate-500 hover:text-white transition"
