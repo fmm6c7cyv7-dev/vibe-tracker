@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, Float, Html, Environment } from '@react-three/drei';
+import { OrbitControls, Stars, Float, Html } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { Settings, Bell, X } from 'lucide-react';
@@ -146,102 +146,95 @@ function BrandLogo({ id }: { id: string }) {
   );
 }
 
-// Transparent neon-glas kärna med animerad 3D-våg
+// Självlysande Liquidity Core med animerad SVG-våg
 function GlassLiquidityCore() {
   const outerSphereRef = useRef<THREE.Mesh>(null!);
-  const waveLineRef = useRef<THREE.Line>(null!);
-  const waveRibbonRef = useRef<THREE.Mesh>(null!);
-
-  const { curvePoints, ribbonGeometry } = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    const count = 90;
-    const radius = 1.35;
-    for (let i = 0; i <= count; i++) {
-      const theta = (i / count) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
-    }
-    const planeGeom = new THREE.PlaneGeometry(2.3, 0.9, 50, 10);
-    return { curvePoints: pts, ribbonGeometry: planeGeom };
-  }, []);
-
-  const lineGeometry = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints(curvePoints);
-  }, [curvePoints]);
+  const [waveOffset, setWaveOffset] = useState(0);
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
     if (outerSphereRef.current) {
-      outerSphereRef.current.rotation.y += delta * 0.15;
+      outerSphereRef.current.rotation.y += delta * 0.2;
     }
-
-    // Animera vågkurvan
-    if (waveRibbonRef.current) {
-      waveRibbonRef.current.rotation.y = Math.sin(t * 0.3) * 0.2;
-      const pos = waveRibbonRef.current.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const u = pos.getX(i);
-        const v = pos.getY(i);
-        const wave = Math.sin(u * 4.0 + t * 4.2) * 0.24 + Math.sin(u * 8.0 - t * 2.0) * 0.08;
-        pos.setZ(i, wave * (1 - Math.abs(u) / 1.5) + Math.sin(v * 3.0 + t) * 0.08);
-      }
-      pos.needsUpdate = true;
-    }
+    setWaveOffset(t * 3.5);
   });
+
+  // Skapa en böljande vågform med sinusberäkning för SVG-path
+  const wavePath = useMemo(() => {
+    let d = "M 10 70 ";
+    for (let x = 10; x <= 190; x += 5) {
+      const y = 68 + Math.sin((x * 0.08) + waveOffset) * 16 + Math.cos((x * 0.16) - waveOffset * 0.6) * 6;
+      d += `L ${x} ${y} `;
+    }
+    d += "L 190 120 L 10 120 Z";
+    return d;
+  }, [waveOffset]);
+
+  const upperWaveLine = useMemo(() => {
+    let d = "M 10 70 ";
+    for (let x = 10; x <= 190; x += 5) {
+      const y = 68 + Math.sin((x * 0.08) + waveOffset) * 16 + Math.cos((x * 0.16) - waveOffset * 0.6) * 6;
+      d += `L ${x} ${y} `;
+    }
+    return d;
+  }, [waveOffset]);
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Mjukt inre neon-ljusfält (cyan & lila gradient) */}
+      {/* Inre glödande sfär i ljusblå/lavendelton */}
       <mesh>
-        <sphereGeometry args={[1.25, 32, 32]} />
-        <meshBasicMaterial
-          color="#38bdf8"
-          transparent
-          opacity={0.15}
-          blending={THREE.AdditiveBlending}
+        <sphereGeometry args={[1.42, 48, 48]} />
+        <meshStandardMaterial
+          color="#6366f1"
+          emissive="#4338ca"
+          emissiveIntensity={0.65}
+          roughness={0.25}
         />
       </mesh>
 
-      {/* Den böljande neonvågen i centrum */}
-      <group position={[0, 0, 0]}>
-        <mesh ref={waveRibbonRef} geometry={ribbonGeometry}>
-          <meshBasicMaterial
-            color="#fb7185"
-            side={THREE.DoubleSide}
-            transparent
-            opacity={0.92}
-          />
-        </mesh>
-        {/* Övre cyan-vågkontur */}
-        {/* @ts-expect-error Three line JSX */}
-        <line geometry={lineGeometry} position={[0, 0.15, 0]}>
-          <lineBasicMaterial color="#38bdf8" linewidth={3} transparent opacity={0.8} />
-        </line>
-      </group>
-
-      {/* Yttre kristallkupol i glas - Hög transparens & glans utan att svärta ner */}
+      {/* Kristallklart yttre glasskal */}
       <mesh ref={outerSphereRef}>
         <sphereGeometry args={[1.65, 64, 64]} />
         <meshStandardMaterial
-          color="#a5b4fc"
+          color="#c7d2fe"
           transparent
-          opacity={0.25}
-          roughness={0.08}
-          metalness={0.2}
+          opacity={0.35}
+          roughness={0.05}
+          metalness={0.1}
           emissive="#818cf8"
-          emissiveIntensity={0.35}
+          emissiveIntensity={0.25}
         />
       </mesh>
 
       {/* Ljusring runt kärnan */}
       <mesh rotation={[Math.PI / 3, 0.2, 0]}>
-        <torusGeometry args={[1.78, 0.018, 16, 100]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
+        <torusGeometry args={[1.78, 0.016, 16, 100]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
       </mesh>
+
+      {/* Animerad EQ/Vibe-våg i centrum */}
+      <Html center transform distanceFactor={9} className="pointer-events-none select-none">
+        <div className="w-52 h-52 flex items-center justify-center">
+          <svg className="w-full h-full overflow-visible" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="waveFillGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
+                <stop offset="45%" stopColor="#f43f5e" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#fb923c" stopOpacity="0.6" />
+              </linearGradient>
+            </defs>
+            {/* Fylld gradientvåg */}
+            <path d={wavePath} fill="url(#waveFillGrad)" />
+            {/* Krispig övre vågkontur */}
+            <path d={upperWaveLine} fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </div>
+      </Html>
     </group>
   );
 }
 
-// Fadeade volymetriska ljusband
+// Mjukt avsmalnande ribbon-trail
 function FadingRibbonTrail({
   node,
   currentAngle,
@@ -254,8 +247,8 @@ function FadingRibbonTrail({
   hovered: boolean;
 }) {
   const segments = 120;
-  const trailSegments = 50;
-  const trailSpan = 1.8;
+  const trailSegments = 45;
+  const trailSpan = 1.6;
 
   const orbitCurvePoints = useMemo(() => {
     const pts: THREE.Vector3[] = [];
@@ -279,7 +272,7 @@ function FadingRibbonTrail({
     if (ribbonMeshRef.current) {
       const geom = ribbonMeshRef.current.geometry;
       const pos = geom.attributes.position;
-      const ribbonWidth = 0.22;
+      const ribbonWidth = 0.14;
 
       for (let i = 0; i <= trailSegments; i++) {
         const fraction = i / trailSegments;
@@ -317,7 +310,6 @@ function FadingRibbonTrail({
 
   return (
     <>
-      {/* Subtil omloppsring */}
       {/* @ts-expect-error Three line */}
       <line geometry={baseLineGeom}>
         <lineBasicMaterial
@@ -327,12 +319,11 @@ function FadingRibbonTrail({
         />
       </line>
 
-      {/* Glödande ribbon-trail med additive blending */}
       <mesh ref={ribbonMeshRef} geometry={ribbonGeometry}>
         <meshBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.8 : 0.5}
+          opacity={isSelected || hovered ? 0.75 : 0.45}
           side={THREE.DoubleSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -399,7 +390,6 @@ function PlanetSphere({
           document.body.style.cursor = 'auto';
         }}
       >
-        {/* Inre glödande sfär */}
         <mesh>
           <sphereGeometry args={[node.size * 0.84, 32, 32]} />
           <meshStandardMaterial
@@ -410,7 +400,6 @@ function PlanetSphere({
           />
         </mesh>
 
-        {/* Yttre transparent glasskal */}
         <mesh>
           <sphereGeometry args={[node.size, 48, 48]} />
           <meshStandardMaterial
@@ -422,7 +411,6 @@ function PlanetSphere({
           />
         </mesh>
 
-        {/* Ljusring kring planeten */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[node.size * 1.06, node.size * 1.26, 36]} />
           <meshBasicMaterial
@@ -433,7 +421,6 @@ function PlanetSphere({
           />
         </mesh>
 
-        {/* Logotyp */}
         <Html center transform distanceFactor={12} className="pointer-events-none select-none">
           <div 
             className="flex items-center justify-center p-2 rounded-full"
@@ -454,7 +441,6 @@ export default function VibeTrackerDashboard() {
 
   return (
     <div className="relative w-full h-screen bg-[#07080d] overflow-hidden select-none font-sans text-white">
-      {/* Subtilt bakgrundsraster */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-20"
         style={{
@@ -466,7 +452,6 @@ export default function VibeTrackerDashboard() {
         }}
       />
 
-      {/* Toppmeny */}
       <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-10 py-5 bg-transparent">
         <div className="flex items-center gap-2">
           <span className="font-bold text-2xl tracking-tight text-white">VibeTracker</span>
@@ -494,7 +479,6 @@ export default function VibeTrackerDashboard() {
         </div>
       </header>
 
-      {/* Underrubriker */}
       <div className="absolute top-16 left-0 right-0 z-10 flex justify-center gap-8 text-xs font-medium text-slate-400">
         <span className="text-slate-200">Overview</span>
         <span>Services</span>
@@ -502,7 +486,6 @@ export default function VibeTrackerDashboard() {
         <span>Budgets</span>
       </div>
 
-      {/* 3D Canvas */}
       <Canvas
         camera={{ position: [0, 6.5, 12.5], fov: 38 }}
         className="w-full h-full"
@@ -543,7 +526,6 @@ export default function VibeTrackerDashboard() {
         />
       </Canvas>
 
-      {/* Popover: Credits Tracking */}
       {selectedNode && (
         <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 w-80 rounded-2xl border border-white/15 bg-[#0e111a]/75 p-4 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-start justify-between border-b border-white/10 pb-2 mb-3">
@@ -574,7 +556,6 @@ export default function VibeTrackerDashboard() {
             </div>
           </div>
 
-          {/* Burn-rate kurva */}
           <div className="rounded-lg bg-white/[0.02] p-2 border border-white/5">
             <div className="flex justify-between text-[10px] text-slate-400 mb-1">
               <span>BURN-RATE (senaste 24h)</span>
@@ -598,7 +579,6 @@ export default function VibeTrackerDashboard() {
         </div>
       )}
 
-      {/* Vänster panel: USAGE TELEMETRY */}
       <div className="absolute bottom-8 left-10 z-20 w-64 rounded-xl border border-white/10 bg-[#0e111a]/75 p-4 backdrop-blur-xl shadow-2xl text-xs">
         <div className="text-[10px] font-semibold tracking-wider text-teal-400 uppercase mb-2">
           Usage Telemetry
@@ -623,7 +603,6 @@ export default function VibeTrackerDashboard() {
         </div>
       </div>
 
-      {/* Höger paneler: OpenAI Budget & GitHub Budget barer */}
       <div className="absolute bottom-8 right-12 z-20 flex flex-col gap-3 w-64">
         <div className="rounded-xl border border-white/10 bg-[#0e111a]/75 p-3.5 backdrop-blur-xl shadow-xl">
           <div className="flex justify-between text-xs mb-1.5">
