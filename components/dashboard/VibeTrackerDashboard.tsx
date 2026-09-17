@@ -38,7 +38,7 @@ const SERVICES: ServiceNode[] = [
     glowColor: '#c084fc',
     orbitRadiusX: 4.8,
     orbitRadiusZ: 2.7,
-    waveAmplitudeY: 0.2,
+    waveAmplitudeY: 0.22,
     tilt: [-0.15, 0.35, -0.05],
     speed: 0.55,
     size: 0.65,
@@ -57,7 +57,7 @@ const SERVICES: ServiceNode[] = [
     glowColor: '#34d399',
     orbitRadiusX: 6.3,
     orbitRadiusZ: 3.4,
-    waveAmplitudeY: -0.25,
+    waveAmplitudeY: -0.28,
     tilt: [0.2, -0.22, 0.1],
     speed: 0.42,
     size: 0.62,
@@ -76,7 +76,7 @@ const SERVICES: ServiceNode[] = [
     glowColor: '#f43f5e',
     orbitRadiusX: 7.7,
     orbitRadiusZ: 4.2,
-    waveAmplitudeY: 0.3,
+    waveAmplitudeY: 0.32,
     tilt: [-0.12, -0.3, 0.18],
     speed: 0.32,
     size: 0.66,
@@ -95,7 +95,7 @@ const SERVICES: ServiceNode[] = [
     glowColor: '#94a3b8',
     orbitRadiusX: 9.1,
     orbitRadiusZ: 4.9,
-    waveAmplitudeY: -0.18,
+    waveAmplitudeY: -0.2,
     tilt: [0.26, 0.15, -0.14],
     speed: 0.25,
     size: 0.58,
@@ -106,7 +106,7 @@ const SERVICES: ServiceNode[] = [
   }
 ];
 
-function BrandLogo({ id, color }: { id: string; color: string }) {
+function BrandLogo({ id }: { id: string }) {
   if (id === 'github') {
     return (
       <svg className="w-7 h-7" viewBox="0 0 24 24" fill="white">
@@ -146,41 +146,37 @@ function BrandLogo({ id, color }: { id: string; color: string }) {
   );
 }
 
-// Den kristallklara glaskärnan med inre levande ljudvåg
+// 3D Kärna med vertikal färgdelad vågform
 function GlassLiquidityCore() {
   const outerSphereRef = useRef<THREE.Mesh>(null!);
-  const wavePointsRef = useRef<THREE.Line>(null!);
-  const haloRef = useRef<THREE.Mesh>(null!);
+  const waveMeshRef = useRef<THREE.Mesh>(null!);
 
-  const { basePoints } = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    const count = 120;
-    const r = 1.35;
-    for (let i = 0; i <= count; i++) {
-      const theta = (i / count) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(theta) * r, 0, Math.sin(theta) * r));
-    }
-    return { basePoints: pts };
+  const { waveGeometry } = useMemo(() => {
+    const segments = 80;
+    const geom = new THREE.PlaneGeometry(2.3, 2.3, segments, 1);
+    return { waveGeometry: geom };
   }, []);
-
-  const lineGeometry = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints(basePoints);
-  }, [basePoints]);
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
-    if (outerSphereRef.current) outerSphereRef.current.rotation.y += delta * 0.15;
-    if (haloRef.current) {
-      haloRef.current.rotation.z += delta * 0.3;
-      const s = 1 + Math.sin(t * 2.5) * 0.04;
-      haloRef.current.scale.set(s, s, s);
+    if (outerSphereRef.current) {
+      outerSphereRef.current.rotation.y += delta * 0.15;
     }
-    if (wavePointsRef.current) {
-      const pos = wavePointsRef.current.geometry.attributes.position;
-      for (let i = 0; i < basePoints.length; i++) {
-        const bp = basePoints[i];
-        const wave = Math.sin(i * 0.35 + t * 4) * 0.35 + Math.cos(i * 0.6 - t * 2) * 0.15;
-        pos.setXYZ(i, bp.x, wave, bp.z);
+
+    if (waveMeshRef.current) {
+      waveMeshRef.current.rotation.y = Math.sin(t * 0.4) * 0.3;
+      const pos = waveMeshRef.current.geometry.attributes.position;
+      const count = pos.count;
+      for (let i = 0; i < count; i++) {
+        const u = pos.getX(i);
+        const isUpper = pos.getY(i) > 0;
+        if (isUpper) {
+          const wave = Math.sin(u * 3.5 + t * 4.5) * 0.28 + Math.cos(u * 6 - t * 2) * 0.12;
+          pos.setY(i, 0.4 + wave);
+        } else {
+          const wave = Math.sin(u * 3.5 + t * 4.5) * 0.25;
+          pos.setY(i, -0.6 + wave * 0.5);
+        }
       }
       pos.needsUpdate = true;
     }
@@ -188,52 +184,53 @@ function GlassLiquidityCore() {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Inre glödande gradientkula */}
+      {/* Glödande inre kärna */}
       <mesh>
-        <sphereGeometry args={[1.32, 64, 64]} />
+        <sphereGeometry args={[1.35, 48, 48]} />
         <meshPhysicalMaterial
           color="#38bdf8"
           emissive="#6366f1"
           emissiveIntensity={0.8}
           roughness={0.2}
           metalness={0.1}
-          transmission={0.6}
+          transmission={0.65}
           thickness={0.8}
         />
       </mesh>
 
-      {/* Den inre böljande neon-vågen */}
-      {/* @ts-expect-error Three line JSX */}
-      <line ref={wavePointsRef} geometry={lineGeometry}>
-        <lineBasicMaterial color="#fb7185" linewidth={4} />
-      </line>
+      {/* Skivad, tvåfärgad vågform */}
+      <group position={[0, 0, 0.1]}>
+        <mesh ref={waveMeshRef} geometry={waveGeometry}>
+          <meshBasicMaterial
+            color="#fb7185"
+            side={THREE.DoubleSide}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      </group>
 
       {/* Yttre kristallklart glasskal */}
       <mesh ref={outerSphereRef}>
-        <sphereGeometry args={[1.65, 64, 64]} />
+        <sphereGeometry args={[1.68, 64, 64]} />
         <meshPhysicalMaterial
-          color="#e0e7ff"
+          color="#f8fafc"
           transparent
-          opacity={0.3}
-          roughness={0.05}
-          metalness={0.1}
-          transmission={0.92}
-          ior={1.45}
-          thickness={1.8}
-          specularIntensity={3}
+          opacity={0.32}
+          roughness={0.04}
+          metalness={0.05}
+          transmission={0.94}
+          ior={1.48}
+          thickness={1.9}
+          specularIntensity={3.5}
         />
-      </mesh>
-
-      {/* Ljusring */}
-      <mesh ref={haloRef} rotation={[Math.PI / 3, 0.25, 0]}>
-        <torusGeometry args={[1.78, 0.025, 16, 120]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
       </mesh>
     </group>
   );
 }
 
-function OrbitSystem({
+// Breda volymetriska ljusband (Ribbon Trail)
+function RibbonOrbitSystem({
   node,
   currentAngle,
   isSelected,
@@ -244,9 +241,11 @@ function OrbitSystem({
   isSelected: boolean;
   hovered: boolean;
 }) {
-  const segments = 160;
+  const segments = 120;
+  const trailSegments = 45;
+  const trailSpan = 1.6;
 
-  const curvePoints = useMemo(() => {
+  const orbitCurvePoints = useMemo(() => {
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= segments; i++) {
       const theta = (i / segments) * Math.PI * 2;
@@ -258,45 +257,75 @@ function OrbitSystem({
     return pts;
   }, [node]);
 
-  const baseGeometry = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints(curvePoints);
-  }, [curvePoints]);
+  const baseLineGeom = useMemo(() => {
+    return new THREE.BufferGeometry().setFromPoints(orbitCurvePoints);
+  }, [orbitCurvePoints]);
 
-  const tailGeometry = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    const trailSegments = 40;
-    const trailSpan = 1.1;
-    for (let i = 0; i <= trailSegments; i++) {
-      const theta = currentAngle - (i / trailSegments) * trailSpan;
-      const x = Math.cos(theta) * node.orbitRadiusX;
-      const z = Math.sin(theta) * node.orbitRadiusZ;
-      const y = Math.sin(theta * 2) * node.waveAmplitudeY;
-      pts.push(new THREE.Vector3(x, y, z));
+  const ribbonMeshRef = useRef<THREE.Mesh>(null!);
+
+  useFrame(() => {
+    if (ribbonMeshRef.current) {
+      const geom = ribbonMeshRef.current.geometry;
+      const pos = geom.attributes.position;
+      const ribbonWidth = 0.16;
+
+      for (let i = 0; i <= trailSegments; i++) {
+        const fraction = i / trailSegments;
+        const theta = currentAngle - fraction * trailSpan;
+        const cx = Math.cos(theta) * node.orbitRadiusX;
+        const cz = Math.sin(theta) * node.orbitRadiusZ;
+        const cy = Math.sin(theta * 2) * node.waveAmplitudeY;
+
+        const currentWidth = ribbonWidth * (1 - fraction * 0.75);
+        pos.setXYZ(i * 2, cx, cy + currentWidth, cz);
+        pos.setXYZ(i * 2 + 1, cx, cy - currentWidth, cz);
+      }
+      pos.needsUpdate = true;
     }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [currentAngle, node]);
+  });
+
+  const ribbonGeometry = useMemo(() => {
+    const geom = new THREE.BufferGeometry();
+    const indices: number[] = [];
+    const positions = new Float32Array((trailSegments + 1) * 2 * 3);
+
+    for (let i = 0; i < trailSegments; i++) {
+      const a = i * 2;
+      const b = i * 2 + 1;
+      const c = (i + 1) * 2;
+      const d = (i + 1) * 2 + 1;
+      indices.push(a, b, c);
+      indices.push(b, d, c);
+    }
+
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setIndex(indices);
+    return geom;
+  }, [trailSegments]);
 
   return (
     <>
-      {/* Tunn omloppsbana */}
+      {/* Fin linje för banan */}
       {/* @ts-expect-error Three line */}
-      <line geometry={baseGeometry}>
+      <line geometry={baseLineGeom}>
         <lineBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.6 : 0.2}
+          opacity={isSelected || hovered ? 0.45 : 0.15}
         />
       </line>
 
-      {/* Ljussvans bakom planeten */}
-      {/* @ts-expect-error Three line */}
-      <line geometry={tailGeometry}>
-        <lineBasicMaterial
+      {/* Svepande ljusband (Ribbon) */}
+      <mesh ref={ribbonMeshRef} geometry={ribbonGeometry}>
+        <meshBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 1 : 0.8}
+          opacity={isSelected || hovered ? 0.85 : 0.5}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
         />
-      </line>
+      </mesh>
     </>
   );
 }
@@ -335,7 +364,7 @@ function PlanetSphere({
 
   return (
     <group rotation={node.tilt}>
-      <OrbitSystem
+      <RibbonOrbitSystem
         node={node}
         currentAngle={currentAngle}
         isSelected={isSelected}
@@ -358,52 +387,52 @@ function PlanetSphere({
           document.body.style.cursor = 'auto';
         }}
       >
-        {/* Inre lysande neonkärna */}
+        {/* Inre glödande neonkärna */}
         <mesh>
-          <sphereGeometry args={[node.size * 0.85, 32, 32]} />
+          <sphereGeometry args={[node.size * 0.88, 32, 32]} />
           <meshStandardMaterial
             color={node.color}
             emissive={node.glowColor}
-            emissiveIntensity={hovered || isSelected ? 1.6 : 1.1}
+            emissiveIntensity={hovered || isSelected ? 1.8 : 1.2}
             roughness={0.2}
           />
         </mesh>
 
-        {/* Yttre genomskinligt glaslager */}
+        {/* Yttre glaskupa */}
         <mesh>
           <sphereGeometry args={[node.size, 48, 48]} />
           <meshPhysicalMaterial
             color="#ffffff"
             transparent
             opacity={0.35}
-            roughness={0.05}
-            transmission={0.9}
-            ior={1.4}
-            thickness={1.2}
-            specularIntensity={2.5}
+            roughness={0.04}
+            transmission={0.92}
+            ior={1.42}
+            thickness={1.3}
+            specularIntensity={3.0}
           />
         </mesh>
 
-        {/* Ljusring runt ekvatorn */}
+        {/* Saturnus-ring runt planeten */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[node.size * 1.08, node.size * 1.25, 32]} />
+          <ringGeometry args={[node.size * 1.1, node.size * 1.32, 40]} />
           <meshBasicMaterial
             color={node.glowColor}
             transparent
-            opacity={hovered || isSelected ? 0.95 : 0.55}
+            opacity={hovered || isSelected ? 0.95 : 0.6}
             side={THREE.DoubleSide}
           />
         </mesh>
 
-        {/* Vektorlogotyp som Html-komponent (alltid skarp & centrerad) */}
+        {/* Vektorlogotyp */}
         <Html center transform distanceFactor={12} className="pointer-events-none select-none">
           <div 
-            className="flex items-center justify-center p-2 rounded-full drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]"
+            className="flex items-center justify-center p-2 rounded-full drop-shadow-[0_0_14px_rgba(255,255,255,0.8)]"
             style={{
-              filter: `drop-shadow(0 0 14px ${node.glowColor})`
+              filter: `drop-shadow(0 0 16px ${node.glowColor})`
             }}
           >
-            <BrandLogo id={node.id} color={node.color} />
+            <BrandLogo id={node.id} />
           </div>
         </Html>
       </group>
