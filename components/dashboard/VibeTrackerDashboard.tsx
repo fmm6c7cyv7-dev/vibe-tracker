@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Html } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { Settings, Bell, X } from 'lucide-react';
+import { Settings, Bell, X, GripHorizontal } from 'lucide-react';
 
 export interface ServiceNode {
   id: string;
@@ -20,10 +20,17 @@ export interface ServiceNode {
   size: number;
 }
 
+interface OpenCard {
+  node: ServiceNode;
+  x: number;
+  y: number;
+  zIndex: number;
+}
+
 const SERVICES: ServiceNode[] = [
   {
     id: 'openai',
-    name: 'OpenAI',
+    name: 'OpenAI API',
     provider: 'OPENAI',
     color: '#059669',
     glowColor: '#10b981',
@@ -59,7 +66,7 @@ const SERVICES: ServiceNode[] = [
   },
   {
     id: 'github',
-    name: 'GitHub',
+    name: 'GitHub Copilot',
     provider: 'GITHUB',
     color: '#7c3aed',
     glowColor: '#a855f7',
@@ -239,7 +246,7 @@ function ServiceGlassOrb({
 
       <group
         ref={groupRef}
-        onClick={(e) => {
+        onPointerDown={(e) => {
           e.stopPropagation();
           onSelect(node);
         }}
@@ -288,16 +295,162 @@ function ServiceGlassOrb({
   );
 }
 
-export default function VibeTrackerDashboard() {
-  const [activeNode, setActiveNode] = useState<ServiceNode | null>(null);
+// DRAGGABLE GLASSMORPHISM TAVLA MED STACKING
+function DraggableCard({
+  card,
+  onClose,
+  onBringToFront,
+  onUpdatePosition
+}: {
+  card: OpenCard;
+  onClose: () => void;
+  onBringToFront: () => void;
+  onUpdatePosition: (x: number, y: number) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    onBringToFront();
+    setIsDragging(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      cardX: card.x,
+      cardY: card.y
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - dragStartRef.current.mouseX;
+    const deltaY = e.clientY - dragStartRef.current.mouseY;
+    onUpdatePosition(
+      dragStartRef.current.cardX + deltaX,
+      dragStartRef.current.cardY + deltaY
+    );
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
 
   return (
-    <div 
-      className="relative w-full h-screen bg-[#07090e] overflow-hidden select-none font-sans text-white"
-      onClick={() => setActiveNode(null)}
+    <div
+      onPointerDown={onBringToFront}
+      style={{
+        left: `${card.x}px`,
+        top: `${card.y}px`,
+        zIndex: card.zIndex
+      }}
+      className={`absolute w-[380px] h-[240px] rounded-2xl border border-white/15 bg-[#0b0f17]/85 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] select-none overflow-hidden transition-shadow duration-200 ${
+        isDragging ? 'shadow-[0_30px_70px_rgba(0,0,0,0.95)] ring-1 ring-white/20' : ''
+      }`}
     >
+      {/* Subtilt spegelblänk över glaset */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 40%, transparent 100%)'
+        }}
+      />
+
+      {/* Speglande glöd i överkant som matchar vald planets neonfärg */}
+      <div
+        className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-32 rounded-full pointer-events-none opacity-45 filter blur-2xl transition-all duration-500"
+        style={{
+          backgroundColor: card.node.glowColor
+        }}
+      />
+
+      {/* DRAG-HEADER / RUBRIKLIST */}
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-white/10 cursor-grab active:cursor-grabbing bg-white/[0.02]"
+      >
+        <div className="flex items-center gap-2 text-xs tracking-wider uppercase font-semibold text-slate-300">
+          <GripHorizontal className="w-3.5 h-3.5 text-slate-500" />
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: card.node.glowColor }}
+          />
+          <span>{card.node.name}</span>
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-white/10"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* TOM ARBETSYTA FÖR INFORMATION/GRAFER */}
+      <div className="relative z-10 w-full h-[180px] p-4 flex items-center justify-center text-slate-500 text-xs tracking-widest uppercase">
+        {/* Tom och ren */}
+      </div>
+    </div>
+  );
+}
+
+export default function VibeTrackerDashboard() {
+  const [openCards, setOpenCards] = useState<OpenCard[]>([]);
+  const [topZ, setTopZ] = useState(40);
+
+  const handleSelectNode = (node: ServiceNode) => {
+    setOpenCards((prev) => {
+      const existing = prev.find((c) => c.node.id === node.id);
+      if (existing) {
+        // Om den redan är öppen, lyft den överst i stacken
+        const nextZ = topZ + 1;
+        setTopZ(nextZ);
+        return prev.map((c) => (c.node.id === node.id ? { ...c, zIndex: nextZ } : c));
+      }
+
+      // Placera ny tavla med en snygg trappstegs-offset för stacking
+      const offset = prev.length * 30;
+      const initialX = typeof window !== 'undefined' ? Math.max(40, window.innerWidth / 2 - 190 + offset) : 100;
+      const initialY = 120 + offset;
+      const nextZ = topZ + 1;
+      setTopZ(nextZ);
+
+      return [...prev, { node, x: initialX, y: initialY, zIndex: nextZ }];
+    });
+  };
+
+  const handleBringToFront = (nodeId: string) => {
+    const nextZ = topZ + 1;
+    setTopZ(nextZ);
+    setOpenCards((prev) =>
+      prev.map((c) => (c.node.id === nodeId ? { ...c, zIndex: nextZ } : c))
+    );
+  };
+
+  const handleUpdatePosition = (nodeId: string, x: number, y: number) => {
+    setOpenCards((prev) =>
+      prev.map((c) => (c.node.id === nodeId ? { ...c, x, y } : c))
+    );
+  };
+
+  const handleCloseCard = (nodeId: string) => {
+    setOpenCards((prev) => prev.filter((c) => c.node.id !== nodeId));
+  };
+
+  return (
+    <div className="relative w-full h-screen bg-[#07090e] overflow-hidden select-none font-sans text-white">
       {/* Bakgrundsglöd */}
-      <div 
+      <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none opacity-20"
         style={{
           background: 'radial-gradient(circle, rgba(56,189,248,0.25) 0%, rgba(168,85,247,0.12) 40%, transparent 70%)'
@@ -356,8 +509,8 @@ export default function VibeTrackerDashboard() {
             <ServiceGlassOrb
               key={node.id}
               node={node}
-              isSelected={activeNode?.id === node.id}
-              onSelect={(n) => setActiveNode(n)}
+              isSelected={openCards.some((c) => c.node.id === node.id)}
+              onSelect={handleSelectNode}
             />
           ))}
         </Float>
@@ -378,31 +531,16 @@ export default function VibeTrackerDashboard() {
         />
       </Canvas>
 
-      {/* RUTA VID KLICK (Tom glassmorphism-ruta som speglar planetens glow) */}
-      {activeNode && (
-        <div 
-          onClick={(e) => e.stopPropagation()}
-          className="absolute top-28 left-1/2 -translate-x-1/2 z-30 w-[360px] h-[220px] rounded-2xl border border-white/15 bg-[#0b0f17]/75 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.7)] p-4 transition-all duration-300 animate-in fade-in zoom-in-95 overflow-hidden"
-        >
-          {/* Speglande glöd i överkant som skiftar med vald planets färg */}
-          <div 
-            className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full pointer-events-none opacity-40 filter blur-xl transition-all duration-500"
-            style={{
-              backgroundColor: activeNode.glowColor
-            }}
-          />
-
-          {/* Stängningsknapp */}
-          <div className="flex justify-end">
-            <button 
-              onClick={() => setActiveNode(null)}
-              className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-white/5"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* DRAGGABLE TAVLOR MED STACKING */}
+      {openCards.map((card) => (
+        <DraggableCard
+          key={card.node.id}
+          card={card}
+          onClose={() => handleCloseCard(card.node.id)}
+          onBringToFront={() => handleBringToFront(card.node.id)}
+          onUpdatePosition={(x, y) => handleUpdatePosition(card.node.id, x, y)}
+        />
+      ))}
 
       {/* Text under kärnan */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-10 text-center">
