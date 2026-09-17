@@ -146,95 +146,103 @@ function BrandLogo({ id }: { id: string }) {
   );
 }
 
-// Självlysande Liquidity Core med animerad SVG-våg
+// Organisk Liquidity Core: sfärisk 3D-kupol med inbäddad böljande vågform
 function GlassLiquidityCore() {
   const outerSphereRef = useRef<THREE.Mesh>(null!);
-  const [waveOffset, setWaveOffset] = useState(0);
+  const waveLineRef = useRef<THREE.Line>(null!);
+  const coreMeshRef = useRef<THREE.Mesh>(null!);
+
+  // Skapa en cirkulär vågskiva som alltid hålls strikt inuti radien
+  const { lineGeom, initialPoints } = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const count = 80;
+    const r = 1.35;
+    for (let i = 0; i <= count; i++) {
+      const x = -r + (i / count) * (2 * r);
+      // Halvcirkelform för att passa sfärens insida
+      const maxZ = Math.sqrt(Math.max(0, r * r - x * x));
+      pts.push(new THREE.Vector3(x, 0, 0));
+    }
+    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+    return { lineGeom: geom, initialPoints: pts };
+  }, []);
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
     if (outerSphereRef.current) {
-      outerSphereRef.current.rotation.y += delta * 0.2;
+      outerSphereRef.current.rotation.y += delta * 0.25;
     }
-    setWaveOffset(t * 3.5);
+    if (coreMeshRef.current) {
+      coreMeshRef.current.rotation.y -= delta * 0.15;
+    }
+
+    if (waveLineRef.current) {
+      const pos = waveLineRef.current.geometry.attributes.position;
+      const count = initialPoints.length;
+      for (let i = 0; i < count; i++) {
+        const x = initialPoints[i].x;
+        // Begränsa vågen i kanterna så den inte skär sfärens väggar
+        const damp = 1.0 - Math.pow(Math.abs(x) / 1.35, 2);
+        const y = (Math.sin(x * 4.5 + t * 4.0) * 0.28 + Math.cos(x * 8.0 - t * 2.0) * 0.08) * damp;
+        pos.setY(i, y);
+      }
+      pos.needsUpdate = true;
+    }
   });
-
-  // Skapa en böljande vågform med sinusberäkning för SVG-path
-  const wavePath = useMemo(() => {
-    let d = "M 10 70 ";
-    for (let x = 10; x <= 190; x += 5) {
-      const y = 68 + Math.sin((x * 0.08) + waveOffset) * 16 + Math.cos((x * 0.16) - waveOffset * 0.6) * 6;
-      d += `L ${x} ${y} `;
-    }
-    d += "L 190 120 L 10 120 Z";
-    return d;
-  }, [waveOffset]);
-
-  const upperWaveLine = useMemo(() => {
-    let d = "M 10 70 ";
-    for (let x = 10; x <= 190; x += 5) {
-      const y = 68 + Math.sin((x * 0.08) + waveOffset) * 16 + Math.cos((x * 0.16) - waveOffset * 0.6) * 6;
-      d += `L ${x} ${y} `;
-    }
-    return d;
-  }, [waveOffset]);
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Inre glödande sfär i ljusblå/lavendelton */}
-      <mesh>
-        <sphereGeometry args={[1.42, 48, 48]} />
+      {/* Inre lysande gradient-klot (undre halvan korall/rosa, övre mjukt cyan) */}
+      <mesh ref={coreMeshRef}>
+        <sphereGeometry args={[1.38, 48, 48]} />
         <meshStandardMaterial
           color="#6366f1"
-          emissive="#4338ca"
-          emissiveIntensity={0.65}
-          roughness={0.25}
+          emissive="#38bdf8"
+          emissiveIntensity={0.6}
+          roughness={0.3}
         />
       </mesh>
 
-      {/* Kristallklart yttre glasskal */}
+      {/* Undre flytande vätskeskål */}
+      <mesh position={[0, -0.3, 0]}>
+        <sphereGeometry args={[1.37, 48, 24, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5]} />
+        <meshStandardMaterial
+          color="#f43f5e"
+          emissive="#e11d48"
+          emissiveIntensity={0.8}
+          roughness={0.2}
+        />
+      </mesh>
+
+      {/* Den lysande vita pulslinjen som skiljer övre och nedre halvan */}
+      {/* @ts-expect-error Three line */}
+      <line ref={waveLineRef} geometry={lineGeom} position={[0, 0, 0.05]}>
+        <lineBasicMaterial color="#ffffff" linewidth={4} />
+      </line>
+
+      {/* Yttre glaskupa med stark specular highlight */}
       <mesh ref={outerSphereRef}>
         <sphereGeometry args={[1.65, 64, 64]} />
         <meshStandardMaterial
-          color="#c7d2fe"
+          color="#ffffff"
           transparent
-          opacity={0.35}
+          opacity={0.3}
           roughness={0.05}
-          metalness={0.1}
-          emissive="#818cf8"
-          emissiveIntensity={0.25}
+          metalness={0.2}
+          emissive="#a5b4fc"
+          emissiveIntensity={0.2}
         />
       </mesh>
 
-      {/* Ljusring runt kärnan */}
+      {/* Ljusring runt ekvatorn */}
       <mesh rotation={[Math.PI / 3, 0.2, 0]}>
-        <torusGeometry args={[1.78, 0.016, 16, 100]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+        <torusGeometry args={[1.76, 0.015, 16, 100]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.6} />
       </mesh>
-
-      {/* Animerad EQ/Vibe-våg i centrum */}
-      <Html center transform distanceFactor={9} className="pointer-events-none select-none">
-        <div className="w-52 h-52 flex items-center justify-center">
-          <svg className="w-full h-full overflow-visible" viewBox="0 0 200 200">
-            <defs>
-              <linearGradient id="waveFillGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
-                <stop offset="45%" stopColor="#f43f5e" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="#fb923c" stopOpacity="0.6" />
-              </linearGradient>
-            </defs>
-            {/* Fylld gradientvåg */}
-            <path d={wavePath} fill="url(#waveFillGrad)" />
-            {/* Krispig övre vågkontur */}
-            <path d={upperWaveLine} fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-        </div>
-      </Html>
     </group>
   );
 }
 
-// Mjukt avsmalnande ribbon-trail
 function FadingRibbonTrail({
   node,
   currentAngle,
@@ -248,7 +256,7 @@ function FadingRibbonTrail({
 }) {
   const segments = 120;
   const trailSegments = 45;
-  const trailSpan = 1.6;
+  const trailSpan = 1.4;
 
   const orbitCurvePoints = useMemo(() => {
     const pts: THREE.Vector3[] = [];
@@ -272,7 +280,7 @@ function FadingRibbonTrail({
     if (ribbonMeshRef.current) {
       const geom = ribbonMeshRef.current.geometry;
       const pos = geom.attributes.position;
-      const ribbonWidth = 0.14;
+      const ribbonWidth = 0.12;
 
       for (let i = 0; i <= trailSegments; i++) {
         const fraction = i / trailSegments;
@@ -323,7 +331,7 @@ function FadingRibbonTrail({
         <meshBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.75 : 0.45}
+          opacity={isSelected || hovered ? 0.8 : 0.5}
           side={THREE.DoubleSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
