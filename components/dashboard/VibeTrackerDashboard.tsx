@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, Float, Html } from '@react-three/drei';
+import { OrbitControls, Stars, Float, Html, Environment } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { Settings, Bell, X } from 'lucide-react';
@@ -146,14 +146,27 @@ function BrandLogo({ id }: { id: string }) {
   );
 }
 
-// Transparent Liquidity Core med animerad dubbeltonad våg
+// Transparent neon-glas kärna med animerad 3D-våg
 function GlassLiquidityCore() {
   const outerSphereRef = useRef<THREE.Mesh>(null!);
-  const waveMeshRef = useRef<THREE.Mesh>(null!);
+  const waveLineRef = useRef<THREE.Line>(null!);
+  const waveRibbonRef = useRef<THREE.Mesh>(null!);
 
-  const { waveGeometry } = useMemo(() => {
-    return { waveGeometry: new THREE.PlaneGeometry(2.4, 1.4, 60, 20) };
+  const { curvePoints, ribbonGeometry } = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const count = 90;
+    const radius = 1.35;
+    for (let i = 0; i <= count; i++) {
+      const theta = (i / count) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
+    }
+    const planeGeom = new THREE.PlaneGeometry(2.3, 0.9, 50, 10);
+    return { curvePoints: pts, ribbonGeometry: planeGeom };
   }, []);
+
+  const lineGeometry = useMemo(() => {
+    return new THREE.BufferGeometry().setFromPoints(curvePoints);
+  }, [curvePoints]);
 
   useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
@@ -161,13 +174,15 @@ function GlassLiquidityCore() {
       outerSphereRef.current.rotation.y += delta * 0.15;
     }
 
-    if (waveMeshRef.current) {
-      const pos = waveMeshRef.current.geometry.attributes.position;
+    // Animera vågkurvan
+    if (waveRibbonRef.current) {
+      waveRibbonRef.current.rotation.y = Math.sin(t * 0.3) * 0.2;
+      const pos = waveRibbonRef.current.geometry.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const u = pos.getX(i);
         const v = pos.getY(i);
-        const wave = Math.sin(u * 3.5 + t * 4.0) * 0.22 + Math.sin(u * 7.0 - t * 2.5) * 0.08;
-        pos.setZ(i, Math.sin(v * 2.0 + t) * 0.15 + wave * 0.4);
+        const wave = Math.sin(u * 4.0 + t * 4.2) * 0.24 + Math.sin(u * 8.0 - t * 2.0) * 0.08;
+        pos.setZ(i, wave * (1 - Math.abs(u) / 1.5) + Math.sin(v * 3.0 + t) * 0.08);
       }
       pos.needsUpdate = true;
     }
@@ -175,42 +190,52 @@ function GlassLiquidityCore() {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Glödande inre nebulosa istället för solid boll */}
+      {/* Mjukt inre neon-ljusfält (cyan & lila gradient) */}
       <mesh>
-        <sphereGeometry args={[1.2, 32, 32]} />
+        <sphereGeometry args={[1.25, 32, 32]} />
         <meshBasicMaterial
-          color="#4338ca"
+          color="#38bdf8"
           transparent
-          opacity={0.35}
+          opacity={0.15}
+          blending={THREE.AdditiveBlending}
         />
       </mesh>
 
-      {/* Flytande våg inuti sfären med mjuk glöd */}
+      {/* Den böljande neonvågen i centrum */}
       <group position={[0, 0, 0]}>
-        <mesh ref={waveMeshRef} geometry={waveGeometry}>
+        <mesh ref={waveRibbonRef} geometry={ribbonGeometry}>
           <meshBasicMaterial
             color="#fb7185"
             side={THREE.DoubleSide}
             transparent
-            opacity={0.85}
+            opacity={0.92}
           />
         </mesh>
+        {/* Övre cyan-vågkontur */}
+        {/* @ts-expect-error Three line JSX */}
+        <line geometry={lineGeometry} position={[0, 0.15, 0]}>
+          <lineBasicMaterial color="#38bdf8" linewidth={3} transparent opacity={0.8} />
+        </line>
       </group>
 
-      {/* Kristallklart glasskal med hög reflektion */}
+      {/* Yttre kristallkupol i glas - Hög transparens & glans utan att svärta ner */}
       <mesh ref={outerSphereRef}>
         <sphereGeometry args={[1.65, 64, 64]} />
-        <meshPhysicalMaterial
-          color="#c7d2fe"
+        <meshStandardMaterial
+          color="#a5b4fc"
           transparent
-          opacity={0.45}
-          roughness={0.05}
-          metalness={0.1}
-          transmission={0.85}
-          ior={1.4}
-          thickness={1.5}
-          specularIntensity={3.0}
+          opacity={0.25}
+          roughness={0.08}
+          metalness={0.2}
+          emissive="#818cf8"
+          emissiveIntensity={0.35}
         />
+      </mesh>
+
+      {/* Ljusring runt kärnan */}
+      <mesh rotation={[Math.PI / 3, 0.2, 0]}>
+        <torusGeometry args={[1.78, 0.018, 16, 100]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
       </mesh>
     </group>
   );
@@ -263,8 +288,7 @@ function FadingRibbonTrail({
         const cz = Math.sin(theta) * node.orbitRadiusZ;
         const cy = Math.sin(theta * 2) * node.waveAmplitudeY;
 
-        // Tona bredden mjukt mot noll
-        const currentWidth = ribbonWidth * (1 - Math.pow(fraction, 1.5));
+        const currentWidth = ribbonWidth * (1 - Math.pow(fraction, 1.4));
         pos.setXYZ(i * 2, cx, cy + currentWidth, cz);
         pos.setXYZ(i * 2 + 1, cx, cy - currentWidth, cz);
       }
@@ -308,7 +332,7 @@ function FadingRibbonTrail({
         <meshBasicMaterial
           color={node.glowColor}
           transparent
-          opacity={isSelected || hovered ? 0.75 : 0.45}
+          opacity={isSelected || hovered ? 0.8 : 0.5}
           side={THREE.DoubleSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -377,37 +401,34 @@ function PlanetSphere({
       >
         {/* Inre glödande sfär */}
         <mesh>
-          <sphereGeometry args={[node.size * 0.82, 32, 32]} />
+          <sphereGeometry args={[node.size * 0.84, 32, 32]} />
           <meshStandardMaterial
             color={node.color}
             emissive={node.glowColor}
-            emissiveIntensity={hovered || isSelected ? 1.5 : 0.9}
-            roughness={0.25}
+            emissiveIntensity={hovered || isSelected ? 1.6 : 1.0}
+            roughness={0.2}
           />
         </mesh>
 
         {/* Yttre transparent glasskal */}
         <mesh>
           <sphereGeometry args={[node.size, 48, 48]} />
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             color="#ffffff"
             transparent
             opacity={0.3}
-            roughness={0.06}
-            transmission={0.88}
-            ior={1.4}
-            thickness={1.1}
-            specularIntensity={2.5}
+            roughness={0.1}
+            metalness={0.15}
           />
         </mesh>
 
-        {/* Lysande ring kring planeten */}
+        {/* Ljusring kring planeten */}
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[node.size * 1.06, node.size * 1.26, 36]} />
           <meshBasicMaterial
             color={node.glowColor}
             transparent
-            opacity={hovered || isSelected ? 0.9 : 0.5}
+            opacity={hovered || isSelected ? 0.95 : 0.55}
             side={THREE.DoubleSide}
           />
         </mesh>
@@ -489,8 +510,8 @@ export default function VibeTrackerDashboard() {
         <color attach="background" args={['#07080d']} />
         <Stars radius={70} depth={40} count={1800} factor={2.5} saturation={0} fade speed={0.8} />
 
-        <ambientLight intensity={0.65} />
-        <directionalLight position={[15, 20, 10]} intensity={2.0} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[15, 20, 10]} intensity={2.2} />
         <pointLight position={[-12, -8, -10]} intensity={1.2} color="#8b5cf6" />
         <pointLight position={[12, -8, 10]} intensity={1.0} color="#38bdf8" />
 
