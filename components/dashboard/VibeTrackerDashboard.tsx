@@ -5,7 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Html } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { Settings, Bell, X } from 'lucide-react';
+import { Settings, Bell } from 'lucide-react';
 
 export interface ServiceNode {
   id: string;
@@ -18,8 +18,6 @@ export interface ServiceNode {
   tilt: [number, number, number];
   speed: number;
   size: number;
-  budgetUsedPercent: number;
-  burnRatePerHour: number;
 }
 
 const SERVICES: ServiceNode[] = [
@@ -33,9 +31,7 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 2.5,
     tilt: [0.15, -0.2, 0.1],
     speed: 0.45,
-    size: 0.62,
-    budgetUsedPercent: 80,
-    burnRatePerHour: 2.45
+    size: 0.62
   },
   {
     id: 'gemini',
@@ -47,9 +43,7 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 3.3,
     tilt: [-0.12, -0.3, 0.18],
     speed: 0.35,
-    size: 0.68,
-    budgetUsedPercent: 42,
-    burnRatePerHour: 1.15
+    size: 0.68
   },
   {
     id: 'vercel',
@@ -61,9 +55,7 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 4.1,
     tilt: [0.22, 0.15, -0.12],
     speed: 0.28,
-    size: 0.58,
-    budgetUsedPercent: 22,
-    burnRatePerHour: 0.30
+    size: 0.58
   },
   {
     id: 'github',
@@ -75,9 +67,7 @@ const SERVICES: ServiceNode[] = [
     orbitRadiusZ: 2.9,
     tilt: [-0.18, 0.35, -0.05],
     speed: 0.5,
-    size: 0.64,
-    budgetUsedPercent: 75,
-    burnRatePerHour: 0.65
+    size: 0.64
   }
 ];
 
@@ -114,7 +104,7 @@ function BrandLogo({ id }: { id: string }) {
   );
 }
 
-// Ren glasbubbla som matchar facit
+// Synlig glasbubbla med tydlig kropp och kantreflexer
 function FacitGlassBubble({
   size,
   color,
@@ -128,46 +118,48 @@ function FacitGlassBubble({
 }) {
   return (
     <group>
-      {/* 1. Mjuk inre neon-glow bakgrund */}
+      {/* 1. Mjuk inre neon-kärna med färg */}
       <mesh>
-        <sphereGeometry args={[size * 0.94, 32, 32]} />
-        <meshBasicMaterial
+        <sphereGeometry args={[size * 0.92, 32, 32]} />
+        <meshStandardMaterial
           color={color}
+          emissive={glowColor}
+          emissiveIntensity={0.8}
+          roughness={0.3}
+          metalness={0.1}
           transparent
-          opacity={0.35}
-          blending={THREE.AdditiveBlending}
+          opacity={0.65}
         />
       </mesh>
 
-      {/* 2. Kristallklar glasbubbla med stark glans och kantreflex */}
+      {/* 2. Yttre transparent glasskal med skarp kant */}
       <mesh>
         <sphereGeometry args={[size, 48, 48]} />
         <meshPhysicalMaterial
           color="#ffffff"
           transparent
-          opacity={0.25}
-          roughness={0.02}
-          metalness={0.1}
-          transmission={0.95}
-          ior={1.35}
-          thickness={0.8}
-          specularIntensity={3.0}
+          opacity={0.4}
+          roughness={0.08}
+          metalness={0.2}
+          transmission={0.6}
+          ior={1.4}
+          thickness={1.2}
+          specularIntensity={2.5}
         />
       </mesh>
 
-      {/* 3. Ljusreflektion på bubblans ovansida (såpbubble-effekt) */}
-      <mesh position={[0, size * 0.45, size * 0.55]} rotation={[-0.4, 0, 0]}>
-        <ringGeometry args={[size * 0.15, size * 0.35, 32, 1, 0, Math.PI]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.65} side={THREE.DoubleSide} />
+      {/* 3. Vit reflexbåge på ovansidan */}
+      <mesh position={[0, size * 0.45, size * 0.6]} rotation={[-0.35, 0, 0]}>
+        <ringGeometry args={[size * 0.12, size * 0.32, 32, 1, 0, Math.PI]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.7} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* Inbäddat innehåll (logotyp eller våg) */}
       {children}
     </group>
   );
 }
 
-// Den stora centrala glasbubblan med integrerad cyan/magenta-gradient och våg
+// Central bubbla med integrerad sfärisk gradient och vit våg
 function FacitCoreBubble() {
   const [waveOffset, setWaveOffset] = useState(0);
 
@@ -186,38 +178,61 @@ function FacitCoreBubble() {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Den stora såpbubblan */}
-      <FacitGlassBubble size={2.1} color="#38bdf8" glowColor="#a855f7">
-        {/* Mjuk sfärisk gradient inuti bubblan via Html */}
-        <Html center transform distanceFactor={9} className="pointer-events-none select-none">
-          <div className="relative w-64 h-64 flex items-center justify-center">
-            {/* Bakgrundsgradient: Cyan uppe, Magenta nere till höger (exakt facit) */}
-            <div
-              className="absolute inset-2 rounded-full opacity-60 filter blur-xl pointer-events-none"
-              style={{
-                background: 'radial-gradient(circle at 35% 35%, #38bdf8 0%, #818cf8 40%, #e879f9 70%, transparent 100%)'
-              }}
-            />
+      {/* Kärnans inre färgade sfär (cyan och lila) */}
+      <mesh>
+        <sphereGeometry args={[1.95, 48, 48]} />
+        <meshStandardMaterial
+          color="#38bdf8"
+          emissive="#6366f1"
+          emissiveIntensity={0.65}
+          roughness={0.3}
+          transparent
+          opacity={0.75}
+        />
+      </mesh>
 
-            {/* Krispig vit ljudvåg */}
-            <svg className="w-full h-full relative z-10" viewBox="0 0 200 200">
-              <path
-                d={waveD}
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth="4"
-                strokeLinecap="round"
-                filter="drop-shadow(0 0 8px rgba(255,255,255,0.9))"
-              />
-            </svg>
-          </div>
-        </Html>
-      </FacitGlassBubble>
+      {/* Yttre glashölje */}
+      <mesh>
+        <sphereGeometry args={[2.1, 64, 64]} />
+        <meshPhysicalMaterial
+          color="#ffffff"
+          transparent
+          opacity={0.35}
+          roughness={0.05}
+          metalness={0.1}
+          transmission={0.7}
+          ior={1.4}
+          thickness={1.5}
+          specularIntensity={3.0}
+        />
+      </mesh>
+
+      {/* Skarp reflexbåge i överkant */}
+      <mesh position={[0, 2.1 * 0.45, 2.1 * 0.6]} rotation={[-0.35, 0, 0]}>
+        <ringGeometry args={[2.1 * 0.15, 2.1 * 0.38, 32, 1, 0, Math.PI]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.75} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Den lysande vita vågen */}
+      <Html center transform distanceFactor={9} className="pointer-events-none select-none">
+        <div className="relative w-64 h-64 flex items-center justify-center">
+          <svg className="w-full h-full relative z-10" viewBox="0 0 200 200">
+            <path
+              d={waveD}
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="4.5"
+              strokeLinecap="round"
+              filter="drop-shadow(0 0 10px rgba(255,255,255,0.95))"
+            />
+          </svg>
+        </div>
+      </Html>
     </group>
   );
 }
 
-// Fina elliptiska omloppsbanor (tunna eleganta ljuslinjer som i facit)
+// Tunna eleganta omloppsbanor
 function FacitOrbitRing({
   radiusX,
   radiusZ,
@@ -245,7 +260,7 @@ function FacitOrbitRing({
       <lineBasicMaterial
         color={color}
         transparent
-        opacity={active ? 0.6 : 0.22}
+        opacity={active ? 0.7 : 0.25}
       />
     </line>
   );
@@ -306,7 +321,6 @@ function PlanetBubbleNode({
           color={node.color}
           glowColor={node.glowColor}
         >
-          {/* Vektorlogotyp inuti bubblan */}
           <Html center transform distanceFactor={10} className="pointer-events-none select-none">
             <div 
               className="flex items-center justify-center p-2 rounded-full"
@@ -327,8 +341,8 @@ export default function VibeTrackerDashboard() {
   const [selectedNode, setSelectedNode] = useState<ServiceNode | null>(SERVICES[0]);
 
   return (
-    <div className="relative w-full h-screen bg-[#0a0c13] overflow-hidden select-none font-sans text-white">
-      {/* Bakgrundsglöd i centrum som lyfter glasbubblorna */}
+    <div className="relative w-full h-screen bg-[#08090d] overflow-hidden select-none font-sans text-white">
+      {/* Bakgrundsglöd i centrum */}
       <div 
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full pointer-events-none opacity-30"
         style={{
@@ -372,14 +386,14 @@ export default function VibeTrackerDashboard() {
         <span>Budgets</span>
       </div>
 
-      {/* 3D Scen */}
+      {/* 3D Canvas */}
       <Canvas
         camera={{ position: [0, 4.8, 11.5], fov: 38 }}
         className="w-full h-full"
       >
-        <color attach="background" args={['#0a0c13']} />
+        <color attach="background" args={['#08090d']} />
 
-        <ambientLight intensity={0.8} />
+        <ambientLight intensity={0.9} />
         <directionalLight position={[10, 15, 12]} intensity={2.5} />
         <pointLight position={[-10, -5, -8]} intensity={1.5} color="#818cf8" />
         <pointLight position={[10, -5, 8]} intensity={1.2} color="#38bdf8" />
@@ -398,9 +412,9 @@ export default function VibeTrackerDashboard() {
 
         <EffectComposer>
           <Bloom
-            luminanceThreshold={0.3}
+            luminanceThreshold={0.25}
             luminanceSmoothing={0.9}
-            intensity={0.8}
+            intensity={0.9}
           />
         </EffectComposer>
 
